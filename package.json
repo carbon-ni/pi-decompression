@@ -1,0 +1,47 @@
+{
+  "name": "pi-compactor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A guarded starter project for a Pi compaction extension.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "lint": "biome lint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "pack:check": "node scripts/check-package.mjs",
+    "audit": "npm audit --audit-level=high"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.11",
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@types/node": "22.20.1",
+    "@vitest/coverage-v8": "4.1.11",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/README.md",
+    "README.md"
+  ]
+}
