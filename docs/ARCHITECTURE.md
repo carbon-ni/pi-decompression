@@ -24,7 +24,7 @@ domain -------> lib
 
 `domain` and `lib` must not import external packages. `make architecture` enforces this rule. `src/index.ts` owns dependency wiring. Pi APIs, file systems, models, clocks, network, and process access belong in `src/infra`.
 
-The current starter has only Pi registration adapter. Add domain code only when compaction behavior is defined by a failing test.
+The current starter has only an empty composition root. Add domain and infrastructure code only when compaction behavior is defined by a failing test.
 
 ## Configuration
 

@@ -2,7 +2,7 @@
 
 Guarded TypeScript starter for a [Pi extension](https://github.com/earendil-works/pi-mono).
 
-The starter registers `/pi-compactor-status` as a smoke-test command. Compaction policy is intentionally not defined yet; add it through tests when requirements are clear.
+The starter exports an empty extension factory. Compaction policy is intentionally not defined yet; add it through tests when requirements are clear.
 
 ## Start
 
@@ -14,7 +14,7 @@ make check
 pi -e ./src/index.ts
 ```
 
-In Pi, run `/pi-compactor-status`. Pi should show `pi-compactor loaded` in interactive mode.
+Pi should start without an extension load error. The starter registers no commands or tools.
 
 ## Canonical workflow
 
