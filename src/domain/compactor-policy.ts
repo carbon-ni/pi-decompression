@@ -16,6 +16,42 @@ export function isUsableHandoff(text: string): boolean {
   return text.trim().length > 0;
 }
 
+/**
+ * Path relative to the reports directory, mirroring the dear-diary layout:
+ * handoffs/<YYYY-MM-DD>/<HH-MM-SS>--<sessionId>.md (local time).
+ */
+export function buildHandoffRelativePath(now: Date, sessionId: string): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const time = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  return `handoffs/${date}/${time}--${sessionId}.md`;
+}
+
+const HANDOFF_FILE =
+  /handoffs\/(\d{4}-\d{2}-\d{2})\/(\d{2}-\d{2}-\d{2})--(.+?)(?:--(\d+))?\.md$/;
+
+/** Pick the newest handoff for a session from relative paths (date, then time, then suffix). */
+export function latestHandoffPath(
+  paths: readonly string[],
+  sessionId: string,
+): string | undefined {
+  let best: { path: string; date: string; time: string; suffix: number } | undefined;
+  for (const path of paths) {
+    const [, date, time, session, suffixText] = HANDOFF_FILE.exec(path) ?? [];
+    if (!date || !time || !session || session !== sessionId) continue;
+    const candidate = { path, date, time, suffix: Number(suffixText ?? 1) };
+    if (
+      !best ||
+      candidate.date > best.date ||
+      (candidate.date === best.date && candidate.time > best.time) ||
+      (candidate.date === best.date && candidate.time === best.time && candidate.suffix > best.suffix)
+    ) {
+      best = candidate;
+    }
+  }
+  return best?.path;
+}
+
 export function buildPointerSummary(handoffPath: string): string {
   return (
     `[Compacted] The full handoff document for this session is at: ${handoffPath}\n` +

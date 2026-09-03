@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildHandoffCompaction,
   buildHandoffPrompt,
+  buildHandoffRelativePath,
   buildPointerSummary,
   isUsableHandoff,
+  latestHandoffPath,
   parseCompactorArgs,
 } from "./compactor-policy.js";
 
@@ -65,6 +67,54 @@ describe("buildHandoffPrompt", () => {
   it("omits the previous handoff section when absent", () => {
     const prompt = buildHandoffPrompt("conversation");
     expect(prompt).not.toContain("previous");
+  });
+});
+
+describe("buildHandoffRelativePath", () => {
+  it("formats handoffs/<date>/<time>--<session>.md from local time", () => {
+    const now = new Date(2026, 3, 13, 20, 55, 1);
+    expect(buildHandoffRelativePath(now, "s1")).toBe("handoffs/2026-04-13/20-55-01--s1.md");
+  });
+
+  it("pads single-digit components", () => {
+    const now = new Date(2026, 0, 2, 3, 4, 5);
+    expect(buildHandoffRelativePath(now, "s1")).toBe("handoffs/2026-01-02/03-04-05--s1.md");
+  });
+});
+
+describe("latestHandoffPath", () => {
+  it("returns undefined when there are no candidates", () => {
+    expect(latestHandoffPath([], "s1")).toBeUndefined();
+  });
+
+  it("picks the newest stamp for the session, ignoring other sessions", () => {
+    const paths = [
+      "handoffs/2026-04-13/09-00-00--s1.md",
+      "handoffs/2026-04-13/20-55-01--other.md",
+      "handoffs/2026-04-13/20-55-01--s1.md",
+    ];
+    expect(latestHandoffPath(paths, "s1")).toBe("handoffs/2026-04-13/20-55-01--s1.md");
+  });
+
+  it("prefers a higher conflict suffix at the same stamp", () => {
+    const paths = [
+      "handoffs/2026-04-13/20-55-01--s1.md",
+      "handoffs/2026-04-13/20-55-01--s1--2.md",
+    ];
+    expect(latestHandoffPath(paths, "s1")).toBe("handoffs/2026-04-13/20-55-01--s1--2.md");
+  });
+
+  it("compares date directories before time", () => {
+    const paths = [
+      "handoffs/2026-04-12/23-59-59--s1.md",
+      "handoffs/2026-04-13/00-00-01--s1.md",
+    ];
+    expect(latestHandoffPath(paths, "s1")).toBe("handoffs/2026-04-13/00-00-01--s1.md");
+  });
+
+  it("ignores non-matching files", () => {
+    const paths = ["README.md", "handoffs/2026-04-13/09-00-00--other.md"];
+    expect(latestHandoffPath(paths, "s1")).toBeUndefined();
   });
 });
 

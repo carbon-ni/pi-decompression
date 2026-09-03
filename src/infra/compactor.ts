@@ -15,8 +15,12 @@ import {
 } from "../domain/compactor-policy.js";
 import { createHandoffStore, type HandoffStore } from "./handoff-store.js";
 
-const HANDOFF_DIR = join(".tmp", "handoffs");
 const MAX_HANDOFF_TOKENS = 8192;
+
+function defaultReportsDir(cwd: string): string {
+  const base = process.env.AGENT_WORKSPACE ?? join(cwd, ".tmp");
+  return join(base, "reports");
+}
 
 type CompleteResponse = Awaited<ReturnType<ExtensionContext["modelRegistry"]["complete"]>>;
 
@@ -42,9 +46,18 @@ export interface Compactor {
   ): Promise<BeforeCompactResult | undefined>;
 }
 
-export function createCompactor(options: { store?: HandoffStore; uuid?: () => string } = {}): Compactor {
+export function createCompactor(
+  options: {
+    store?: HandoffStore;
+    uuid?: () => string;
+    now?: () => Date;
+    reportsDir?: (cwd: string) => string;
+  } = {},
+): Compactor {
   const store = options.store ?? createHandoffStore();
   const uuid = options.uuid ?? randomUUID;
+  const now = options.now ?? (() => new Date());
+  const reportsDir = options.reportsDir ?? defaultReportsDir;
   let enabled = false;
 
   async function command(args: string, ctx: ExtensionCommandContext): Promise<void> {
@@ -74,9 +87,9 @@ export function createCompactor(options: { store?: HandoffStore; uuid?: () => st
     if (!model) return undefined;
 
     const sessionId = ctx.sessionManager.getSessionId();
-    const dir = join(ctx.cwd, HANDOFF_DIR);
+    const dir = reportsDir(ctx.cwd);
     const conversationText = serializeConversation(convertToLlm(messages));
-    const previousHandoff = await store.read(dir, sessionId);
+    const previousHandoff = await store.readLatest(dir, sessionId);
     const prompt = buildHandoffPrompt(conversationText, previousHandoff);
 
     let handoffText: string;
@@ -107,7 +120,7 @@ export function createCompactor(options: { store?: HandoffStore; uuid?: () => st
 
     if (!isUsableHandoff(handoffText)) return undefined;
 
-    const handoffFile = await store.write(dir, sessionId, handoffText);
+    const handoffFile = await store.write(dir, sessionId, handoffText, now());
     return {
       compaction: {
         ...buildHandoffCompaction({
