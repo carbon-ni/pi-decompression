@@ -1,0 +1,30 @@
+---
+id: TASK-0011
+title: Simplify status countdown to remaining percentage
+status: doing
+depends_on: []
+priority: normal
+tags: []
+---
+
+# Simplify status countdown to remaining percentage
+
+## Problem
+The footer repeats labels and threshold details when the user only needs the percentage remaining before decompression.
+
+## Desired outcome
+When usage is known and a threshold is configured, footer item shows only remaining percentage before decompression, for example `10%`.
+
+## Acceptance criteria
+- [ ] Known usage renders only `<left>%`; it does not include `decompression`, `left`, slash, or configured threshold.
+- [ ] Countdown calculation remains `ceil(max(thresholdPercent - contextUsagePercent, 0))`.
+- [ ] At or above threshold renders `0%`.
+- [ ] Unknown usage renders `--`.
+- [ ] Enabled state without threshold retains concise `on:no-threshold`; disabled state clears footer item.
+- [ ] Tests are changed before production formatter.
+- [ ] README shows compact footer contract.
+- [ ] Final watcher and release gates pass.
+
+## Constraints
+- Do not change threshold behavior, lifecycle refresh, persistence, or compaction.
+
