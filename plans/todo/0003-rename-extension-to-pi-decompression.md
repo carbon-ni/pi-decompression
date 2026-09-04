@@ -1,7 +1,7 @@
 ---
 id: TASK-0003
 title: Rename extension to pi-decompression
-status: todo
+status: doing
 depends_on: []
 priority: high
 tags: [rename, branding, decompression]
