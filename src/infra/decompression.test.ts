@@ -655,6 +655,44 @@ describe("threshold watcher", () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
+  it("does not compact again while post-compaction usage remains above threshold", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 40", makeCtx<CommandCtx>());
+    let usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const ctx = makeSettledCtx({ getContextUsage: () => usage });
+
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+
+    usage = { tokens: 90_000, contextWindow: 200_000, percent: 45 };
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("rearms after usage falls below threshold and retriggers later", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 40", makeCtx<CommandCtx>());
+    let usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const ctx = makeSettledCtx({ getContextUsage: () => usage });
+
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+
+    usage = { tokens: 70_000, contextWindow: 200_000, percent: 35 };
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    usage = { tokens: 90_000, contextWindow: 200_000, percent: 45 };
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(2);
+  });
+
   it("reports cancellation, clears pending state, and allows a later fresh trigger", async () => {
     const resume = vi.fn();
     const decompression = createTestDecompression(fakeFs(), { resume });

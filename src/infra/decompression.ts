@@ -138,6 +138,7 @@ export function createDecompression(
   const reportsDir = options.reportsDir ?? defaultReportsDir;
   let enabled = false;
   let thresholdPercent: number | null = null;
+  let thresholdArmed = true;
   let nextDecompressionId = 0;
   type DecompressionRequest = {
     id: number;
@@ -173,6 +174,7 @@ export function createDecompression(
     switch (command.action) {
       case "enable":
         enabled = true;
+        thresholdArmed = true;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
         updateStatus(ctx, currentState());
@@ -181,6 +183,7 @@ export function createDecompression(
         break;
       case "disable":
         enabled = false;
+        thresholdArmed = true;
         pendingDecompression = undefined;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
@@ -193,6 +196,7 @@ export function createDecompression(
         break;
       case "setThreshold":
         thresholdPercent = command.percent;
+        thresholdArmed = true;
         lastHandledUsage = undefined;
         updateStatus(ctx, currentState());
         await persistState(ctx);
@@ -255,8 +259,12 @@ export function createDecompression(
 
     if (!enabled || thresholdPercent === null || activeDecompression) return;
     const usage = getUsage(ctx);
-    if (!usage || !shouldDecompressAt(usage.percent, thresholdPercent)) return;
-    if (sameUsage(usage, lastHandledUsage)) return;
+    if (!usage) return;
+    if (!shouldDecompressAt(usage.percent, thresholdPercent)) {
+      thresholdArmed = true;
+      return;
+    }
+    if (!thresholdArmed || sameUsage(usage, lastHandledUsage)) return;
 
     const idleDecompression = {
       id: ++nextDecompressionId,
@@ -306,6 +314,7 @@ export function createDecompression(
     }
 
     if (!wasPending) return;
+    thresholdArmed = false;
     resumeInterrupted(ctx, request);
   }
 
@@ -352,6 +361,7 @@ export function createDecompression(
       } else {
         request.compacted = true;
       }
+      thresholdArmed = false;
       const usage = getUsage(ctx);
       lastHandledUsage = usage ?? request.usage;
       return;
@@ -399,6 +409,7 @@ export function createDecompression(
     lastHandledUsage = undefined;
     enabled = false;
     thresholdPercent = null;
+    thresholdArmed = true;
     updateStatus(ctx, currentState());
     if (!ctx.isProjectTrusted()) return;
     const state = await config.read(ctx.cwd);
