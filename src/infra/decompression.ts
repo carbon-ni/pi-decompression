@@ -15,6 +15,7 @@ import {
 import {
   buildHandoffDecompression,
   buildHandoffPrompt,
+  formatDecompressionStatus,
   isUsableHandoff,
   parseDecompressionArgs,
   shouldDecompressAt,
@@ -174,6 +175,7 @@ export function createDecompression(
         enabled = true;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
+        updateStatus(ctx, currentState());
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -182,6 +184,7 @@ export function createDecompression(
         pendingDecompression = undefined;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
+        updateStatus(ctx, currentState());
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -191,6 +194,7 @@ export function createDecompression(
       case "setThreshold":
         thresholdPercent = command.percent;
         lastHandledUsage = undefined;
+        updateStatus(ctx, currentState());
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -393,11 +397,15 @@ export function createDecompression(
     pendingDecompression = undefined;
     activeDecompression = undefined;
     lastHandledUsage = undefined;
+    enabled = false;
+    thresholdPercent = null;
+    updateStatus(ctx, currentState());
     if (!ctx.isProjectTrusted()) return;
     const state = await config.read(ctx.cwd);
     if (!state) return;
     enabled = state.enabled;
     thresholdPercent = state.thresholdPercent;
+    updateStatus(ctx, currentState());
   }
 
   async function beforeCompact(
@@ -492,4 +500,8 @@ function notify(
   type: "info" | "error" = "info",
 ): void {
   ctx.ui.notify(message, type);
+}
+
+function updateStatus(ctx: ExtensionContext, state: DecompressionState): void {
+  ctx.ui.setStatus("decompression", formatDecompressionStatus(state));
 }

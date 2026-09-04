@@ -32,6 +32,8 @@ Examples:
 - `/break 60` — set the context threshold to 60%.
 - `/decompress on 60` — enable decompression and set its threshold.
 
+When enabled, the Pi footer shows `decompression on:60%` for a configured threshold or `decompression on:no-threshold` when no threshold is configured. Disabling decompression clears this footer item.
+
 State is persisted for trusted projects in `.pi/decompression.json`. When enabled with a threshold, pi-decompression checks usage after each completed turn. If active work reaches the threshold, the completed turn and its tool results are preserved, Pi stops before another assistant turn, and a handoff is created during Pi's compaction. After successful compaction, interrupted work resumes once unless a queued user message already continues it. If usage is already over the threshold while idle, Pi compacts without synthetic continuation. Handoffs are written under `$AGENT_WORKSPACE/reports` (or `.tmp/reports` when `AGENT_WORKSPACE` is unset).
 
 ## Canonical workflow

@@ -60,6 +60,18 @@ export interface DecompressionState {
   thresholdPercent: number | null;
 }
 
+/** Format the additive footer status; undefined clears the item. */
+export function formatDecompressionStatus(
+  state: DecompressionState,
+): string | undefined {
+  if (!state.enabled) return undefined;
+  const threshold =
+    state.thresholdPercent === null
+      ? "no-threshold"
+      : `${state.thresholdPercent}%`;
+  return `decompression on:${threshold}`;
+}
+
 /** Validate untyped config-file content; undefined means invalid. */
 export function parseDecompressionState(
   data: unknown,

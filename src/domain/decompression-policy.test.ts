@@ -6,6 +6,7 @@ import {
   buildPointerSummary,
   isUsableHandoff,
   latestHandoffPath,
+  formatDecompressionStatus,
   parseDecompressionArgs,
   parseDecompressionState,
   shouldDecompressAt,
@@ -80,6 +81,26 @@ describe("parseDecompressionArgs", () => {
     expect(parseDecompressionArgs("on 60.5")).toEqual({ action: "invalid" });
     expect(parseDecompressionArgs("on 60 70")).toEqual({ action: "invalid" });
     expect(parseDecompressionArgs("60 70")).toEqual({ action: "invalid" });
+  });
+});
+
+describe("formatDecompressionStatus", () => {
+  it("formats enabled state with a threshold", () => {
+    expect(
+      formatDecompressionStatus({ enabled: true, thresholdPercent: 60 }),
+    ).toBe("decompression on:60%");
+  });
+
+  it("formats enabled state without a threshold", () => {
+    expect(
+      formatDecompressionStatus({ enabled: true, thresholdPercent: null }),
+    ).toBe("decompression on:no-threshold");
+  });
+
+  it("clears disabled state", () => {
+    expect(
+      formatDecompressionStatus({ enabled: false, thresholdPercent: 60 }),
+    ).toBeUndefined();
   });
 });
 

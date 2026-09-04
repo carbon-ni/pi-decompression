@@ -89,7 +89,7 @@ it("resumes through Pi's sendUserMessage adapter after native compaction", async
     cwd: "/proj",
     isProjectTrusted: () => false,
     hasUI: false,
-    ui: { notify: vi.fn() },
+    ui: { notify: vi.fn(), setStatus: vi.fn() },
     getContextUsage: () => ({
       tokens: 150_000,
       contextWindow: 200_000,

@@ -111,7 +111,7 @@ function makeCtx<C>(overrides: Record<string, unknown> = {}): C {
     cwd: "/proj",
     isProjectTrusted: () => true,
     hasUI: false,
-    ui: { notify: vi.fn() },
+    ui: { notify: vi.fn(), setStatus: vi.fn() },
     ...overrides,
   } as unknown as C;
 }
@@ -166,6 +166,60 @@ describe("threshold watcher", () => {
     await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates the status immediately after enabling", async () => {
+    const decompression = createTestDecompression();
+    const ctx = makeCtx<CommandCtx>();
+
+    await decompression.command("on 60", ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
+      "decompression",
+      "decompression on:60%",
+    );
+  });
+
+  it("shows an explicit status when enabled without a threshold", async () => {
+    const decompression = createTestDecompression();
+    const ctx = makeCtx<CommandCtx>();
+
+    await decompression.command("on", ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
+      "decompression",
+      "decompression on:no-threshold",
+    );
+  });
+
+  it("clears the status immediately after disabling", async () => {
+    const decompression = createTestDecompression();
+    const ctx = makeCtx<CommandCtx>();
+
+    await decompression.command("on 60", ctx);
+    vi.mocked(ctx.ui.setStatus).mockClear();
+    await decompression.command("off", ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("decompression", undefined);
+  });
+
+  it("updates status even when persistence fails", async () => {
+    const config = {
+      read: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn().mockRejectedValue(new Error("read-only")),
+    };
+    const decompression = createDecompression({
+      store: createHandoffStore(fakeFs()),
+      config,
+    });
+    const ctx = makeCtx<CommandCtx>();
+
+    await decompression.command("on 60", ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
+      "decompression",
+      "decompression on:60%",
+    );
   });
 
   it("enables and arms the threshold in one command: on 60", async () => {
@@ -914,6 +968,60 @@ describe("config persistence", () => {
 
     expect(decompression.enabled).toBe(true);
     expect(fs.files.has("/proj/.pi/decompression.json")).toBe(false);
+  });
+
+  it("restores enabled status from config on session start", async () => {
+    const fs = fakeFs();
+    fs.files.set(
+      "/proj/.pi/decompression.json",
+      JSON.stringify({ enabled: true, thresholdPercent: 60 }),
+    );
+    const decompression = createTestDecompression(fs);
+    const ctx = makeCtx<BeforeCompactCtx>();
+
+    await decompression.onSessionStart(
+      { type: "session_start", reason: "startup" },
+      ctx,
+    );
+
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
+      "decompression",
+      "decompression on:60%",
+    );
+  });
+
+  it("clears status for disabled, malformed, missing, and untrusted config", async () => {
+    const cases: Array<{
+      content?: string;
+      trusted?: boolean;
+    }> = [
+      { content: JSON.stringify({ enabled: false, thresholdPercent: 60 }) },
+      { content: "{broken" },
+      {},
+      {
+        content: JSON.stringify({ enabled: true, thresholdPercent: 60 }),
+        trusted: false,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const fs = fakeFs();
+      if (testCase.content) {
+        fs.files.set("/proj/.pi/decompression.json", testCase.content);
+      }
+      const decompression = createTestDecompression(fs);
+      const ctx = makeCtx<BeforeCompactCtx>({
+        isProjectTrusted: () => testCase.trusted ?? true,
+      });
+
+      await decompression.onSessionStart(
+        { type: "session_start", reason: "startup" },
+        ctx,
+      );
+
+      expect(ctx.ui.setStatus).toHaveBeenCalledWith("decompression", undefined);
+      expect(decompression.enabled).toBe(false);
+    }
   });
 
   it("restores state from .pi/decompression.json on session start", async () => {
