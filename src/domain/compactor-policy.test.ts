@@ -12,45 +12,48 @@ import {
 } from "./compactor-policy.js";
 
 describe("parseCompactorArgs", () => {
+  it("shows status on empty args", () => {
+    expect(parseCompactorArgs("")).toEqual({ action: "status" });
+    expect(parseCompactorArgs("   ")).toEqual({ action: "status" });
+  });
+
   it("enables on 'on'", () => {
-    expect(parseCompactorArgs("on")).toEqual({ action: "enable" });
+    expect(parseCompactorArgs("on")).toEqual({ action: "enable", threshold: null });
   });
 
   it("disables on 'off'", () => {
-    expect(parseCompactorArgs("off")).toEqual({ action: "disable" });
+    expect(parseCompactorArgs("off")).toEqual({ action: "disable", threshold: null });
   });
 
-  it("parses 'status'", () => {
-    expect(parseCompactorArgs("status")).toEqual({ action: "status" });
+  it("parses a bare threshold as setThreshold", () => {
+    expect(parseCompactorArgs("60")).toEqual({ action: "setThreshold", percent: 60 });
   });
 
-  it("parses an integer threshold percentage", () => {
-    expect(parseCompactorArgs("threshold 60")).toEqual({ action: "setThreshold", percent: 60 });
+  it("parses toggle with threshold in one command", () => {
+    expect(parseCompactorArgs("on 60")).toEqual({ action: "enable", threshold: 60 });
+    expect(parseCompactorArgs("off 60")).toEqual({ action: "disable", threshold: 60 });
   });
 
   it("trims and lowercases input", () => {
-    expect(parseCompactorArgs("  ON  ")).toEqual({ action: "enable" });
-    expect(parseCompactorArgs(" Off ")).toEqual({ action: "disable" });
-    expect(parseCompactorArgs("THRESHOLD 75")).toEqual({ action: "setThreshold", percent: 75 });
-  });
-
-  it("rejects empty args", () => {
-    expect(parseCompactorArgs("")).toEqual({ action: "invalid" });
-    expect(parseCompactorArgs("   ")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("  ON  ")).toEqual({ action: "enable", threshold: null });
+    expect(parseCompactorArgs(" Off ")).toEqual({ action: "disable", threshold: null });
+    expect(parseCompactorArgs("ON 75")).toEqual({ action: "enable", threshold: 75 });
   });
 
   it("rejects unknown args", () => {
     expect(parseCompactorArgs("maybe")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("status")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("threshold 60")).toEqual({ action: "invalid" });
     expect(parseCompactorArgs("on off")).toEqual({ action: "invalid" });
   });
 
   it("rejects malformed thresholds", () => {
-    expect(parseCompactorArgs("threshold")).toEqual({ action: "invalid" });
-    expect(parseCompactorArgs("threshold abc")).toEqual({ action: "invalid" });
-    expect(parseCompactorArgs("threshold 0")).toEqual({ action: "invalid" });
-    expect(parseCompactorArgs("threshold 101")).toEqual({ action: "invalid" });
-    expect(parseCompactorArgs("threshold 60.5")).toEqual({ action: "invalid" });
-    expect(parseCompactorArgs("threshold 60 70")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("on abc")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("on 0")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("on 101")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("on 60.5")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("on 60 70")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("60 70")).toEqual({ action: "invalid" });
   });
 });
 

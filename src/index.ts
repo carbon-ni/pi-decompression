@@ -10,7 +10,7 @@ export default function piCompactor(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("compactor", {
-    description: "Toggle handoff compaction (/compactor on|off|status|threshold <1-100>)",
+    description: "Handoff compaction (/compactor [on|off] [threshold])",
     handler: compactor.command,
   });
   pi.on("session_start", compactor.onSessionStart);

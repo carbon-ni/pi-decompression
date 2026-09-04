@@ -92,11 +92,13 @@ export function createCompactor(
     switch (command.action) {
       case "enable":
         enabled = true;
+        if (command.threshold !== null) thresholdPercent = command.threshold;
         await persistState(ctx);
         notify(ctx, describeState());
         break;
       case "disable":
         enabled = false;
+        if (command.threshold !== null) thresholdPercent = command.threshold;
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -109,7 +111,7 @@ export function createCompactor(
         notify(ctx, describeState());
         break;
       case "invalid":
-        notify(ctx, `usage: /compactor on|off|status|threshold <1-100> — ${describeState()}`);
+        notify(ctx, `usage: /compactor [on|off] [threshold] — ${describeState()}`);
         break;
     }
   }

@@ -102,7 +102,7 @@ describe("threshold watcher", () => {
   it("compacts when usage reaches the configured threshold", async () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
-    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+    await compactor.command("60", makeCtx<CommandCtx>());
 
     const ctx = makeEndCtx();
     await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
@@ -110,10 +110,30 @@ describe("threshold watcher", () => {
     expect(ctx.compact).toHaveBeenCalledTimes(1);
   });
 
+  it("enables and arms the threshold in one command: on 60", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    expect(compactor.enabled).toBe(true);
+
+    const ctx = makeEndCtx();
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists the combined form to config", async () => {
+    const fs = fakeFs();
+    const compactor = createTestCompactor(fs);
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+
+    const saved = JSON.parse(fs.files.get("/proj/.pi/compactor.json") ?? "{}") as unknown;
+    expect(saved).toEqual({ enabled: true, thresholdPercent: 60 });
+  });
+
   it("does not compact below the threshold", async () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
-    await compactor.command("threshold 80", makeCtx<CommandCtx>());
+    await compactor.command("80", makeCtx<CommandCtx>());
 
     const ctx = makeEndCtx();
     await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
@@ -123,7 +143,7 @@ describe("threshold watcher", () => {
 
   it("does not compact when disabled", async () => {
     const compactor = createTestCompactor();
-    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+    await compactor.command("60", makeCtx<CommandCtx>());
 
     const ctx = makeEndCtx();
     await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
@@ -134,7 +154,7 @@ describe("threshold watcher", () => {
   it("does not compact when usage is unknown", async () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
-    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+    await compactor.command("60", makeCtx<CommandCtx>());
 
     const ctx = makeEndCtx({ getContextUsage: () => undefined });
     await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
@@ -155,10 +175,10 @@ describe("threshold watcher", () => {
   it("status reports state and threshold", async () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
-    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+    await compactor.command("60", makeCtx<CommandCtx>());
 
     const ctx = makeCtx<CommandCtx>();
-    await compactor.command("status", ctx);
+    await compactor.command("", ctx);
 
     const message = vi.mocked(ctx.ui.notify).mock.calls.at(-1)?.[0] as string | undefined;
     expect(message).toContain("on");
@@ -297,7 +317,7 @@ describe("config persistence", () => {
     const fs = fakeFs();
     const compactor = createTestCompactor(fs);
     await compactor.command("on", makeCtx<CommandCtx>());
-    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+    await compactor.command("60", makeCtx<CommandCtx>());
 
     const saved = JSON.parse(fs.files.get("/proj/.pi/compactor.json") ?? "{}") as unknown;
     expect(saved).toEqual({ enabled: true, thresholdPercent: 60 });

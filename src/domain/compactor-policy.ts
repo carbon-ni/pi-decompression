@@ -4,31 +4,41 @@
  */
 
 export type CompactorCommand =
-  | { action: "enable" }
-  | { action: "disable" }
   | { action: "status" }
+  | { action: "enable"; threshold: number | null }
+  | { action: "disable"; threshold: number | null }
   | { action: "setThreshold"; percent: number }
   | { action: "invalid" };
 
+/**
+ * Positional syntax: /compactor [on|off] [threshold]
+ * No args shows status; a bare integer sets the threshold only.
+ */
 export function parseCompactorArgs(args: string): CompactorCommand {
   const words = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const [keyword, ...rest] = words;
+  const percentOf = (word: string | undefined): number | undefined => {
+    if (word === undefined) return undefined;
+    const value = Number(word);
+    return Number.isInteger(value) && value >= 1 && value <= 100 ? value : undefined;
+  };
+  const [keyword, thresholdWord] = words;
   switch (keyword) {
+    case undefined:
+      return { action: "status" };
     case "on":
-      return rest.length === 0 ? { action: "enable" } : { action: "invalid" };
-    case "off":
-      return rest.length === 0 ? { action: "disable" } : { action: "invalid" };
-    case "status":
-      return rest.length === 0 ? { action: "status" } : { action: "invalid" };
-    case "threshold": {
-      const percent = Number(rest[0]);
-      if (rest.length !== 1 || !Number.isInteger(percent) || percent < 1 || percent > 100) {
-        return { action: "invalid" };
-      }
-      return { action: "setThreshold", percent };
+    case "off": {
+      if (words.length > 2) return { action: "invalid" };
+      const threshold = percentOf(thresholdWord);
+      if (thresholdWord !== undefined && threshold === undefined) return { action: "invalid" };
+      return keyword === "on"
+        ? { action: "enable", threshold: threshold ?? null }
+        : { action: "disable", threshold: threshold ?? null };
     }
-    default:
-      return { action: "invalid" };
+    default: {
+      if (words.length !== 1) return { action: "invalid" };
+      const percent = percentOf(keyword);
+      return percent === undefined ? { action: "invalid" } : { action: "setThreshold", percent };
+    }
   }
 }
 
