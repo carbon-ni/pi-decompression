@@ -7,8 +7,7 @@ export default function piDecompression(pi: ExtensionAPI): void {
   const decompression = createDecompression({
     store: createHandoffStore(),
     config: createDecompressionConfig(),
-    resume: (message) =>
-      pi.sendUserMessage(message, { deliverAs: "followUp" }),
+    resume: (message) => pi.sendUserMessage(message, { deliverAs: "followUp" }),
   });
 
   const command = {
