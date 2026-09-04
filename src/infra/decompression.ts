@@ -154,6 +154,17 @@ export function createDecompression(
     return { enabled, thresholdPercent };
   }
 
+  function observeThreshold(usage: UsageSnapshot): boolean {
+    if (
+      thresholdPercent === null ||
+      !shouldDecompressAt(usage.percent, thresholdPercent)
+    ) {
+      thresholdArmed = true;
+      return false;
+    }
+    return thresholdArmed;
+  }
+
   async function persistState(ctx: ExtensionContext): Promise<void> {
     if (!ctx.isProjectTrusted()) return;
     try {
@@ -223,8 +234,7 @@ export function createDecompression(
   ): Promise<void> {
     if (!enabled || thresholdPercent === null) return;
     const usage = getUsage(ctx);
-    if (!usage) return;
-    if (!shouldDecompressAt(usage.percent, thresholdPercent)) return;
+    if (!usage || !observeThreshold(usage)) return;
     if (sameUsage(usage, lastHandledUsage)) return;
     if (pendingDecompression || activeDecompression) return;
 
@@ -259,12 +269,8 @@ export function createDecompression(
 
     if (!enabled || thresholdPercent === null || activeDecompression) return;
     const usage = getUsage(ctx);
-    if (!usage) return;
-    if (!shouldDecompressAt(usage.percent, thresholdPercent)) {
-      thresholdArmed = true;
-      return;
-    }
-    if (!thresholdArmed || sameUsage(usage, lastHandledUsage)) return;
+    if (!usage || !observeThreshold(usage)) return;
+    if (sameUsage(usage, lastHandledUsage)) return;
 
     const idleDecompression = {
       id: ++nextDecompressionId,

@@ -655,6 +655,52 @@ describe("threshold watcher", () => {
     expect(resume).not.toHaveBeenCalled();
   });
 
+  it("does not interrupt a resumed turn while usage remains above threshold", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 40", makeCtx<CommandCtx>());
+    let usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => usage,
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+
+    usage = { tokens: 90_000, contextWindow: 200_000, percent: 45 };
+    await decompression.onTurnEnd(makeTurnEndEvent(2), ctx);
+
+    expect(ctx.abort).toHaveBeenCalledTimes(1);
+  });
+
+  it("rearms active-work interruption after usage falls below threshold", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 40", makeCtx<CommandCtx>());
+    let usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => usage,
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+
+    usage = { tokens: 70_000, contextWindow: 200_000, percent: 35 };
+    await decompression.onTurnEnd(makeTurnEndEvent(2), ctx);
+    usage = { tokens: 90_000, contextWindow: 200_000, percent: 45 };
+    await decompression.onTurnEnd(makeTurnEndEvent(3), ctx);
+
+    expect(ctx.abort).toHaveBeenCalledTimes(2);
+  });
+
   it("does not compact again while post-compaction usage remains above threshold", async () => {
     const decompression = createTestDecompression();
     await decompression.command("on 40", makeCtx<CommandCtx>());
