@@ -6,8 +6,9 @@ export default function piCompactor(pi: ExtensionAPI): void {
   const compactor = createCompactor({ store: createHandoffStore() });
 
   pi.registerCommand("compactor", {
-    description: "Toggle handoff compaction (/compactor on|off)",
+    description: "Toggle handoff compaction (/compactor on|off|status|threshold <1-100>)",
     handler: compactor.command,
   });
   pi.on("session_before_compact", compactor.beforeCompact);
+  pi.on("agent_end", compactor.onAgentEnd);
 }

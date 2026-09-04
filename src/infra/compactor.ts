@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   convertToLlm,
   serializeConversation,
+  type AgentEndEvent,
   type ExtensionCommandContext,
   type ExtensionContext,
   type SessionBeforeCompactEvent,
@@ -12,6 +13,8 @@ import {
   buildHandoffPrompt,
   isUsableHandoff,
   parseCompactorArgs,
+  shouldCompactAt,
+  type CompactorCommand,
 } from "../domain/compactor-policy.js";
 import { createHandoffStore, type HandoffStore } from "./handoff-store.js";
 
@@ -44,6 +47,7 @@ export interface Compactor {
     event: SessionBeforeCompactEvent,
     ctx: ExtensionContext,
   ): Promise<BeforeCompactResult | undefined>;
+  onAgentEnd(event: AgentEndEvent, ctx: ExtensionContext): Promise<void>;
 }
 
 export function createCompactor(
@@ -59,18 +63,44 @@ export function createCompactor(
   const now = options.now ?? (() => new Date());
   const reportsDir = options.reportsDir ?? defaultReportsDir;
   let enabled = false;
+  let thresholdPercent: number | null = null;
 
   async function command(args: string, ctx: ExtensionCommandContext): Promise<void> {
-    const action = parseCompactorArgs(args);
-    if (action === "enable") {
-      enabled = true;
-      notify(ctx, "compactor on: compaction writes a handoff file and keeps almost nothing");
-    } else if (action === "disable") {
-      enabled = false;
-      notify(ctx, "compactor off: default pi compaction");
-    } else {
-      notify(ctx, `usage: /compactor on|off (currently ${enabled ? "on" : "off"})`);
+    const command: CompactorCommand = parseCompactorArgs(args);
+    switch (command.action) {
+      case "enable":
+        enabled = true;
+        notify(ctx, describeState());
+        break;
+      case "disable":
+        enabled = false;
+        notify(ctx, describeState());
+        break;
+      case "status":
+        notify(ctx, describeState());
+        break;
+      case "setThreshold":
+        thresholdPercent = command.percent;
+        notify(ctx, describeState());
+        break;
+      case "invalid":
+        notify(ctx, `usage: /compactor on|off|status|threshold <1-100> — ${describeState()}`);
+        break;
     }
+  }
+
+  function describeState(): string {
+    const threshold = thresholdPercent === null ? "none" : `${thresholdPercent}%`;
+    return `compactor ${enabled ? "on" : "off"}, threshold ${threshold}`;
+  }
+
+  async function onAgentEnd(_event: AgentEndEvent, ctx: ExtensionContext): Promise<void> {
+    if (!enabled || thresholdPercent === null) return;
+    const percent = ctx.getContextUsage()?.percent ?? null;
+    if (!shouldCompactAt(percent, thresholdPercent)) return;
+    notify(ctx, `context at ${percent}%, threshold ${thresholdPercent}% — compacting`);
+    // Compaction itself is not an agent run, so this cannot self-loop.
+    ctx.compact();
   }
 
   async function beforeCompact(
@@ -140,6 +170,7 @@ export function createCompactor(
     },
     command,
     beforeCompact,
+    onAgentEnd,
   };
 }
 

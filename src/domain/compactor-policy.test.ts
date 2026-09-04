@@ -7,30 +7,64 @@ import {
   isUsableHandoff,
   latestHandoffPath,
   parseCompactorArgs,
+  shouldCompactAt,
 } from "./compactor-policy.js";
 
 describe("parseCompactorArgs", () => {
   it("enables on 'on'", () => {
-    expect(parseCompactorArgs("on")).toBe("enable");
+    expect(parseCompactorArgs("on")).toEqual({ action: "enable" });
   });
 
   it("disables on 'off'", () => {
-    expect(parseCompactorArgs("off")).toBe("disable");
+    expect(parseCompactorArgs("off")).toEqual({ action: "disable" });
+  });
+
+  it("parses 'status'", () => {
+    expect(parseCompactorArgs("status")).toEqual({ action: "status" });
+  });
+
+  it("parses an integer threshold percentage", () => {
+    expect(parseCompactorArgs("threshold 60")).toEqual({ action: "setThreshold", percent: 60 });
   });
 
   it("trims and lowercases input", () => {
-    expect(parseCompactorArgs("  ON  ")).toBe("enable");
-    expect(parseCompactorArgs("Off")).toBe("disable");
+    expect(parseCompactorArgs("  ON  ")).toEqual({ action: "enable" });
+    expect(parseCompactorArgs(" Off ")).toEqual({ action: "disable" });
+    expect(parseCompactorArgs("THRESHOLD 75")).toEqual({ action: "setThreshold", percent: 75 });
   });
 
   it("rejects empty args", () => {
-    expect(parseCompactorArgs("")).toBe("invalid");
-    expect(parseCompactorArgs("   ")).toBe("invalid");
+    expect(parseCompactorArgs("")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("   ")).toEqual({ action: "invalid" });
   });
 
   it("rejects unknown args", () => {
-    expect(parseCompactorArgs("maybe")).toBe("invalid");
-    expect(parseCompactorArgs("on off")).toBe("invalid");
+    expect(parseCompactorArgs("maybe")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("on off")).toEqual({ action: "invalid" });
+  });
+
+  it("rejects malformed thresholds", () => {
+    expect(parseCompactorArgs("threshold")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("threshold abc")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("threshold 0")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("threshold 101")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("threshold 60.5")).toEqual({ action: "invalid" });
+    expect(parseCompactorArgs("threshold 60 70")).toEqual({ action: "invalid" });
+  });
+});
+
+describe("shouldCompactAt", () => {
+  it("compacts when usage reaches the threshold", () => {
+    expect(shouldCompactAt(60, 60)).toBe(true);
+    expect(shouldCompactAt(75, 60)).toBe(true);
+  });
+
+  it("waits below the threshold", () => {
+    expect(shouldCompactAt(59, 60)).toBe(false);
+  });
+
+  it("never compacts on unknown usage", () => {
+    expect(shouldCompactAt(null, 60)).toBe(false);
   });
 });
 

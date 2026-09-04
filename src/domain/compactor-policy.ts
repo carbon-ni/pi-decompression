@@ -3,13 +3,38 @@
  * No external imports — everything arrives as parameters.
  */
 
-export type CompactorCommandAction = "enable" | "disable" | "invalid";
+export type CompactorCommand =
+  | { action: "enable" }
+  | { action: "disable" }
+  | { action: "status" }
+  | { action: "setThreshold"; percent: number }
+  | { action: "invalid" };
 
-export function parseCompactorArgs(args: string): CompactorCommandAction {
-  const normalized = args.trim().toLowerCase();
-  if (normalized === "on") return "enable";
-  if (normalized === "off") return "disable";
-  return "invalid";
+export function parseCompactorArgs(args: string): CompactorCommand {
+  const words = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const [keyword, ...rest] = words;
+  switch (keyword) {
+    case "on":
+      return rest.length === 0 ? { action: "enable" } : { action: "invalid" };
+    case "off":
+      return rest.length === 0 ? { action: "disable" } : { action: "invalid" };
+    case "status":
+      return rest.length === 0 ? { action: "status" } : { action: "invalid" };
+    case "threshold": {
+      const percent = Number(rest[0]);
+      if (rest.length !== 1 || !Number.isInteger(percent) || percent < 1 || percent > 100) {
+        return { action: "invalid" };
+      }
+      return { action: "setThreshold", percent };
+    }
+    default:
+      return { action: "invalid" };
+  }
+}
+
+/** Trigger the custom threshold compaction when usage percent reaches the threshold. */
+export function shouldCompactAt(contextPercent: number | null, thresholdPercent: number): boolean {
+  return contextPercent !== null && contextPercent >= thresholdPercent;
 }
 
 export function isUsableHandoff(text: string): boolean {

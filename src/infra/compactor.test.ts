@@ -87,6 +87,82 @@ function createTestCompactor(fs: ReturnType<typeof fakeFs> = fakeFs()) {
   });
 }
 
+function makeEndCtx(overrides: Record<string, unknown> = {}) {
+  return makeCtx<BeforeCompactCtx>({
+    getContextUsage: () => ({ tokens: 150_000, contextWindow: 200_000, percent: 75 }),
+    compact: vi.fn(),
+    ...overrides,
+  });
+}
+
+describe("threshold watcher", () => {
+  it("compacts when usage reaches the configured threshold", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on", makeCtx<CommandCtx>());
+    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+
+    const ctx = makeEndCtx();
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not compact below the threshold", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on", makeCtx<CommandCtx>());
+    await compactor.command("threshold 80", makeCtx<CommandCtx>());
+
+    const ctx = makeEndCtx();
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("does not compact when disabled", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+
+    const ctx = makeEndCtx();
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("does not compact when usage is unknown", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on", makeCtx<CommandCtx>());
+    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+
+    const ctx = makeEndCtx({ getContextUsage: () => undefined });
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("no threshold set means no watching", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on", makeCtx<CommandCtx>());
+
+    const ctx = makeEndCtx();
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("status reports state and threshold", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on", makeCtx<CommandCtx>());
+    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+
+    const ctx = makeCtx<CommandCtx>();
+    await compactor.command("status", ctx);
+
+    const message = vi.mocked(ctx.ui.notify).mock.calls.at(-1)?.[0] as string | undefined;
+    expect(message).toContain("on");
+    expect(message).toContain("60");
+  });
+});
+
 describe("createCompactor", () => {
   it("is disabled by default: beforeCompact does nothing", async () => {
     const compactor = createTestCompactor();
@@ -223,5 +299,6 @@ describe("index wiring", () => {
 
     expect(pi.registerCommand).toHaveBeenCalledWith("compactor", expect.anything());
     expect(pi.on).toHaveBeenCalledWith("session_before_compact", expect.anything());
+    expect(pi.on).toHaveBeenCalledWith("agent_end", expect.anything());
   });
 });
