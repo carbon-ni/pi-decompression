@@ -1,7 +1,7 @@
 ---
 id: TASK-0001
 title: Show decompression state in status bar
-status: todo
+status: doing
 depends_on: [TASK-0003]
 priority: normal
 tags: [ui, decompression]
