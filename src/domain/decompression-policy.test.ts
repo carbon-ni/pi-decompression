@@ -4,9 +4,9 @@ import {
   buildHandoffPrompt,
   buildHandoffRelativePath,
   buildPointerSummary,
+  formatDecompressionStatus,
   isUsableHandoff,
   latestHandoffPath,
-  formatDecompressionStatus,
   parseDecompressionArgs,
   parseDecompressionState,
   shouldDecompressAt,
@@ -85,21 +85,37 @@ describe("parseDecompressionArgs", () => {
 });
 
 describe("formatDecompressionStatus", () => {
-  it("formats enabled state with a threshold", () => {
-    expect(
-      formatDecompressionStatus({ enabled: true, thresholdPercent: 60 }),
-    ).toBe("decompression on:60%");
-  });
+  it.each([
+    [undefined, 60, "decompression -- left/60%"],
+    [null, 60, "decompression -- left/60%"],
+    [44.98, 60, "decompression 56% left/60%"],
+    [45, 60, "decompression 55% left/60%"],
+    [60, 60, "decompression 40% left/60%"],
+    [75, 60, "decompression 25% left/60%"],
+    [99.99, 60, "decompression 1% left/60%"],
+    [100, 60, "decompression 0% left/60%"],
+    [105, 60, "decompression 0% left/60%"],
+  ] as const)(
+    "formats %s usage with threshold %s",
+    (usage, threshold, expected) => {
+      expect(
+        formatDecompressionStatus(
+          { enabled: true, thresholdPercent: threshold },
+          usage,
+        ),
+      ).toBe(expected);
+    },
+  );
 
   it("formats enabled state without a threshold", () => {
     expect(
-      formatDecompressionStatus({ enabled: true, thresholdPercent: null }),
+      formatDecompressionStatus({ enabled: true, thresholdPercent: null }, 45),
     ).toBe("decompression on:no-threshold");
   });
 
   it("clears disabled state", () => {
     expect(
-      formatDecompressionStatus({ enabled: false, thresholdPercent: 60 }),
+      formatDecompressionStatus({ enabled: false, thresholdPercent: 60 }, 45),
     ).toBeUndefined();
   });
 });

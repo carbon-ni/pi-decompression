@@ -1,26 +1,26 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import {
-  convertToLlm,
-  serializeConversation,
   type AgentSettledEvent,
+  convertToLlm,
   type ExtensionCommandContext,
   type ExtensionContext,
   type SessionBeforeCompactEvent,
   type SessionCompactEvent,
   type SessionShutdownEvent,
   type SessionStartEvent,
+  serializeConversation,
   type TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import {
   buildHandoffDecompression,
   buildHandoffPrompt,
+  type DecompressionCommand,
+  type DecompressionState,
   formatDecompressionStatus,
   isUsableHandoff,
   parseDecompressionArgs,
   shouldDecompressAt,
-  type DecompressionCommand,
-  type DecompressionState,
 } from "../domain/decompression-policy.js";
 import {
   createDecompressionConfig,
@@ -149,6 +149,7 @@ export function createDecompression(
   let pendingDecompression: DecompressionRequest | undefined;
   let activeDecompression: DecompressionRequest | undefined;
   let lastHandledUsage: UsageSnapshot | undefined;
+  let statusUsagePercent: number | undefined;
 
   function currentState(): DecompressionState {
     return { enabled, thresholdPercent };
@@ -188,7 +189,7 @@ export function createDecompression(
         thresholdArmed = true;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
-        updateStatus(ctx, currentState());
+        updateStatus(ctx, currentState(), statusUsagePercent);
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -198,7 +199,7 @@ export function createDecompression(
         pendingDecompression = undefined;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
-        updateStatus(ctx, currentState());
+        updateStatus(ctx, currentState(), statusUsagePercent);
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -209,7 +210,7 @@ export function createDecompression(
         thresholdPercent = command.percent;
         thresholdArmed = true;
         lastHandledUsage = undefined;
-        updateStatus(ctx, currentState());
+        updateStatus(ctx, currentState(), statusUsagePercent);
         await persistState(ctx);
         notify(ctx, describeState());
         break;
@@ -234,6 +235,8 @@ export function createDecompression(
   ): Promise<void> {
     if (!enabled || thresholdPercent === null) return;
     const usage = getUsage(ctx);
+    statusUsagePercent = usage?.percent;
+    updateStatus(ctx, currentState(), statusUsagePercent);
     if (!usage || !observeThreshold(usage)) return;
     if (sameUsage(usage, lastHandledUsage)) return;
     if (pendingDecompression || activeDecompression) return;
@@ -269,6 +272,8 @@ export function createDecompression(
 
     if (!enabled || thresholdPercent === null || activeDecompression) return;
     const usage = getUsage(ctx);
+    statusUsagePercent = usage?.percent;
+    updateStatus(ctx, currentState(), statusUsagePercent);
     if (!usage || !observeThreshold(usage)) return;
     if (sameUsage(usage, lastHandledUsage)) return;
 
@@ -321,6 +326,8 @@ export function createDecompression(
 
     if (!wasPending) return;
     thresholdArmed = false;
+    statusUsagePercent = undefined;
+    updateStatus(ctx, currentState());
     resumeInterrupted(ctx, request);
   }
 
@@ -370,8 +377,12 @@ export function createDecompression(
       thresholdArmed = false;
       const usage = getUsage(ctx);
       lastHandledUsage = usage ?? request.usage;
+      statusUsagePercent = undefined;
+      updateStatus(ctx, currentState());
       return;
     }
+    statusUsagePercent = undefined;
+    updateStatus(ctx, currentState());
     const usage = getUsage(ctx);
     if (usage) lastHandledUsage = usage;
   }
@@ -387,6 +398,8 @@ export function createDecompression(
     const request = pendingDecompression;
     pendingDecompression = undefined;
     const usage = getUsage(ctx);
+    statusUsagePercent = usage?.percent;
+    updateStatus(ctx, currentState(), statusUsagePercent);
     if (usage) lastHandledUsage = usage;
     if (request?.interrupted) {
       notify(
@@ -404,6 +417,7 @@ export function createDecompression(
     pendingDecompression = undefined;
     activeDecompression = undefined;
     lastHandledUsage = undefined;
+    statusUsagePercent = undefined;
   }
 
   async function onSessionStart(
@@ -413,6 +427,7 @@ export function createDecompression(
     pendingDecompression = undefined;
     activeDecompression = undefined;
     lastHandledUsage = undefined;
+    statusUsagePercent = undefined;
     enabled = false;
     thresholdPercent = null;
     thresholdArmed = true;
@@ -519,6 +534,13 @@ function notify(
   ctx.ui.notify(message, type);
 }
 
-function updateStatus(ctx: ExtensionContext, state: DecompressionState): void {
-  ctx.ui.setStatus("decompression", formatDecompressionStatus(state));
+function updateStatus(
+  ctx: ExtensionContext,
+  state: DecompressionState,
+  contextPercent?: number | null,
+): void {
+  ctx.ui.setStatus(
+    "decompression",
+    formatDecompressionStatus(state, contextPercent),
+  );
 }

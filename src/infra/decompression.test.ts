@@ -176,7 +176,7 @@ describe("threshold watcher", () => {
 
     expect(ctx.ui.setStatus).toHaveBeenCalledWith(
       "decompression",
-      "decompression on:60%",
+      "decompression -- left/60%",
     );
   });
 
@@ -218,7 +218,7 @@ describe("threshold watcher", () => {
 
     expect(ctx.ui.setStatus).toHaveBeenCalledWith(
       "decompression",
-      "decompression on:60%",
+      "decompression -- left/60%",
     );
   });
 
@@ -399,6 +399,89 @@ describe("threshold watcher", () => {
       | undefined;
     expect(message).toContain("on");
     expect(message).toContain("60");
+  });
+
+  it("renders the latest turn usage as remaining context", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({
+      getContextUsage: () => ({
+        tokens: 90_000,
+        contextWindow: 200_000,
+        percent: 44.98,
+      }),
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
+      "decompression",
+      "decompression 56% left/60%",
+    );
+  });
+
+  it("shows unknown usage after an unavailable observation", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ getContextUsage: () => undefined });
+
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
+      "decompression",
+      "decompression -- left/60%",
+    );
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("keeps the latest usage across command status refreshes", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    const observation = makeSettledCtx({
+      getContextUsage: () => ({
+        tokens: 90_000,
+        contextWindow: 200_000,
+        percent: 45,
+      }),
+    });
+    await decompression.onAgentSettled({ type: "agent_settled" }, observation);
+
+    const commandCtx = makeCtx<CommandCtx>();
+    await decompression.command("60", commandCtx);
+
+    expect(commandCtx.ui.setStatus).toHaveBeenLastCalledWith(
+      "decompression",
+      "decompression 55% left/60%",
+    );
+  });
+
+  it("clears the countdown after successful threshold compaction", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => ({
+        tokens: 120_000,
+        contextWindow: 200_000,
+        percent: 60,
+      }),
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
+      "decompression",
+      "decompression 40% left/60%",
+    );
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: () => void;
+    };
+    options.onComplete?.();
+
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
+      "decompression",
+      "decompression -- left/60%",
+    );
   });
 
   it("does not inspect turn usage while disabled", async () => {
@@ -1092,9 +1175,9 @@ describe("config persistence", () => {
       ctx,
     );
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
       "decompression",
-      "decompression on:60%",
+      "decompression -- left/60%",
     );
   });
 

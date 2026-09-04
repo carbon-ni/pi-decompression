@@ -63,13 +63,15 @@ export interface DecompressionState {
 /** Format the additive footer status; undefined clears the item. */
 export function formatDecompressionStatus(
   state: DecompressionState,
+  contextPercent?: number | null,
 ): string | undefined {
   if (!state.enabled) return undefined;
-  const threshold =
-    state.thresholdPercent === null
-      ? "no-threshold"
-      : `${state.thresholdPercent}%`;
-  return `decompression on:${threshold}`;
+  if (state.thresholdPercent === null) return "decompression on:no-threshold";
+  if (contextPercent === undefined || contextPercent === null) {
+    return `decompression -- left/${state.thresholdPercent}%`;
+  }
+  const remaining = Math.ceil(Math.max(100 - contextPercent, 0));
+  return `decompression ${remaining}% left/${state.thresholdPercent}%`;
 }
 
 /** Validate untyped config-file content; undefined means invalid. */
