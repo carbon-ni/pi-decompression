@@ -99,11 +99,13 @@ describe("formatDecompressionStatus", () => {
   it.each([
     [undefined, 60, "decompression -- left/60%"],
     [null, 60, "decompression -- left/60%"],
-    [44.98, 60, "decompression 56% left/60%"],
-    [45, 60, "decompression 55% left/60%"],
-    [60, 60, "decompression 40% left/60%"],
-    [75, 60, "decompression 25% left/60%"],
-    [99.99, 60, "decompression 1% left/60%"],
+    [10, 50, "decompression 40% left/50%"],
+    [44.98, 60, "decompression 16% left/60%"],
+    [45, 60, "decompression 15% left/60%"],
+    [59.99, 60, "decompression 1% left/60%"],
+    [60, 60, "decompression 0% left/60%"],
+    [75, 60, "decompression 0% left/60%"],
+    [99.99, 60, "decompression 0% left/60%"],
     [100, 60, "decompression 0% left/60%"],
     [105, 60, "decompression 0% left/60%"],
   ] as const)(

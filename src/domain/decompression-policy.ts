@@ -75,7 +75,9 @@ export function formatDecompressionStatus(
   if (contextPercent === undefined || contextPercent === null) {
     return `decompression -- left/${state.thresholdPercent}%`;
   }
-  const remaining = Math.ceil(Math.max(100 - contextPercent, 0));
+  const remaining = Math.ceil(
+    Math.max(state.thresholdPercent - contextPercent, 0),
+  );
   return `decompression ${remaining}% left/${state.thresholdPercent}%`;
 }
 

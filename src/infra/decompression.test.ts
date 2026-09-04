@@ -425,7 +425,7 @@ describe("threshold watcher", () => {
 
     expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
       "decompression",
-      "decompression 56% left/60%",
+      "decompression 16% left/60%",
     );
   });
 
@@ -460,7 +460,7 @@ describe("threshold watcher", () => {
 
     expect(commandCtx.ui.setStatus).toHaveBeenLastCalledWith(
       "decompression",
-      "decompression 55% left/60%",
+      "decompression 15% left/60%",
     );
   });
 
@@ -479,7 +479,7 @@ describe("threshold watcher", () => {
     await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
     expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
       "decompression",
-      "decompression 40% left/60%",
+      "decompression 0% left/60%",
     );
     await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
     const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
