@@ -121,7 +121,10 @@ Keep one continuation owner and one delivery adapter. Remove temporary instrumen
 - Composition root now calls `pi.sendUserMessage(message, { deliverAs: "followUp" })`.
 - Adapter regression assertion was red before production edit and green afterward.
 - Focused index tests, typecheck, and `make check` pass.
-- Still required before closing: deterministic full-runtime semantic-marker proof on actual Pi lifecycle and verdict on secondary above-threshold `Nothing to compact` retrigger.
+- Secondary loop reproduced red and fixed across both idle and active paths: `5262e85` introduced threshold disarming; `b1a6ae6` added shared `observeThreshold()` plus active `onTurnEnd` regression coverage.
+- Above-threshold post-compaction usage no longer retriggers; observed below-threshold usage re-arms a later crossing.
+- Funzzy `verify @agent-final` passes through watcher generation 3.
+- Still required before closing: deterministic full-runtime semantic-marker proof on actual Pi lifecycle.
 
 ## Evidence to retain
 - Pi version under test.
