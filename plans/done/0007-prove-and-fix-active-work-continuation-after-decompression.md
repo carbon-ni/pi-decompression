@@ -1,7 +1,7 @@
 ---
 id: TASK-0007
 title: Prove and fix active-work continuation after decompression
-status: doing
+status: done
 depends_on: []
 priority: high
 tags: [decompression, continuation, integration, regression]
@@ -35,21 +35,21 @@ This confirms continuation is attempted while Pi still considers agent active. C
 Same run later retriggered decompression while post-compaction context remained about 45% against 40% threshold and failed with `Nothing to compact (session too small)`. Treat this as related regression evidence: continuation fix must not create compact/resume loop, and test should distinguish one interrupted cycle from later irreducible high usage.
 
 ## Acceptance criteria
-- [ ] Add deterministic full-path test that loads real extension through Pi SDK/runtime rather than directly calling extension handlers.
-- [ ] Script model behavior so active goal needs another turn, first completed turn crosses threshold, compaction returns usable handoff, and resumed turn emits unique marker such as `ORIGINAL_GOAL_RESUMED`.
-- [ ] Assert ordered evidence: original user goal → completed pre-threshold turn/tool result → one compaction entry/event → synthetic continuation user message → resumed assistant marker.
-- [ ] Assert no assistant continuation starts between threshold crossing and compaction.
-- [ ] Assert exactly one compaction and exactly one synthetic continuation; another generic `agent_start` is insufficient evidence.
-- [ ] Assert continuation message is accepted by Pi, appears in session context, and results in resumed assistant output.
-- [ ] Add unhappy-path proof that compaction failure emits error and never sends/runs continuation.
-- [ ] Preserve queued-user-message behavior: real queued input is not overtaken or duplicated by synthetic continuation.
-- [ ] Exercise the repository-pinned Pi 0.84.4 runtime and, when an equivalent offline harness exists, the installed Pi version; otherwise record the installed version and observed error as version-specific evidence without claiming equivalent reproduction.
-- [ ] New full-path test reproduces the rejected continuation with an equivalent `Agent is already processing` failure before production change when the target runtime exposes that failure. If the pinned SDK accepts the old call, record the controlled no-option pass and retain focused adapter red evidence instead of fabricating a full-path red result.
-- [ ] Successful fix queues continuation explicitly as follow-up when Pi remains active during compaction completion; test proves it is later delivered exactly once.
-- [ ] Production code is unchanged until the smallest available regression test fails for the observed reason; a focused adapter red test is acceptable when the pinned SDK cannot expose the installed-runtime incompatibility.
-- [ ] Smallest evidence-backed fix makes new regression test pass without weakening existing active, idle, queue, collision, failure, and stale-usage tests.
-- [ ] README describes actual ordering precisely: stop boundary, compaction, and when continuation is queued/delivered.
-- [ ] `make check` passes and coverage remains at configured threshold.
+- [x] Add deterministic full-path test that loads real extension through Pi SDK/runtime rather than directly calling extension handlers.
+- [x] Script model behavior so active goal needs another turn, first completed turn crosses threshold, compaction returns usable handoff, and resumed turn emits unique marker such as `ORIGINAL_GOAL_RESUMED`.
+- [x] Assert ordered evidence: original user goal → completed pre-threshold turn/tool result → one compaction entry/event → synthetic continuation user message → resumed assistant marker.
+- [x] Assert no assistant continuation starts between threshold crossing and compaction.
+- [x] Assert exactly one compaction and exactly one synthetic continuation; another generic `agent_start` is insufficient evidence.
+- [x] Assert continuation message is accepted by Pi, appears in session context, and results in resumed assistant output.
+- [x] Add unhappy-path proof that compaction failure emits error and never sends/runs continuation.
+- [x] Preserve queued-user-message behavior: real queued input is not overtaken or duplicated by synthetic continuation.
+- [x] Exercise the repository-pinned Pi 0.84.4 runtime and, when an equivalent offline harness exists, the installed Pi version; otherwise record the installed version and observed error as version-specific evidence without claiming equivalent reproduction.
+- [x] New full-path test reproduces the rejected continuation with an equivalent `Agent is already processing` failure before production change when the target runtime exposes that failure. If the pinned SDK accepts the old call, record the controlled no-option pass and retain focused adapter red evidence instead of fabricating a full-path red result.
+- [x] Successful fix queues continuation explicitly as follow-up when Pi remains active during compaction completion; test proves it is later delivered exactly once.
+- [x] Production code is unchanged until the smallest available regression test fails for the observed reason; a focused adapter red test is acceptable when the pinned SDK cannot expose the installed-runtime incompatibility.
+- [x] Smallest evidence-backed fix makes new regression test pass without weakening existing active, idle, queue, collision, failure, and stale-usage tests.
+- [x] README describes actual ordering precisely: stop boundary, compaction, and when continuation is queued/delivered.
+- [x] `make check` passes and coverage remains at configured threshold.
 
 ## Recommended deterministic test design
 
