@@ -1,7 +1,7 @@
 ---
 id: TASK-0007
 title: Prove and fix active-work continuation after decompression
-status: todo
+status: doing
 depends_on: []
 priority: high
 tags: [decompression, continuation, integration, regression]
