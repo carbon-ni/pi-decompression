@@ -4,6 +4,7 @@
     "includes": [
       "**",
       "!!.pi",
+      "!!.pi-funzzy-automatic-responder.json",
       "!!.tmp",
       "!!dist",
       "!!coverage",
