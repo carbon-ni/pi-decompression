@@ -142,6 +142,15 @@ function makeSettledCtx(overrides: Record<string, unknown> = {}) {
   });
 }
 
+function makeManualCtx(overrides: Record<string, unknown> = {}) {
+  return makeCtx<CommandCtx>({
+    compact: vi.fn(),
+    hasPendingMessages: () => false,
+    isIdle: () => true,
+    ...overrides,
+  });
+}
+
 function makeTurnEndEvent(turnIndex = 1): TurnEndEvent {
   return {
     type: "turn_end",
@@ -1004,6 +1013,163 @@ describe("createDecompression", () => {
     await decompression.command("maybe", ctx);
     expect(decompression.enabled).toBe(false);
     expect(ctx.ui.notify).toHaveBeenCalled();
+  });
+
+  it("runs an immediate handoff compaction while disabled without resuming", async () => {
+    const fs = fakeFs();
+    const resume = vi.fn();
+    const decompression = createTestDecompression(fs, { resume });
+    const ctx = makeManualCtx();
+
+    await decompression.command("now", ctx);
+    const result = await decompression.beforeCompact(
+      makeEvent(),
+      ctx as unknown as BeforeCompactCtx,
+    );
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: () => void;
+    };
+    options.onComplete?.();
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+    expect(result?.compaction?.details?.handoffPath).toBe(HANDOFF_FILE);
+    expect(resume).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: completed",
+      "info",
+    );
+  });
+
+  it("preserves automatic state and persisted config for an immediate request", async () => {
+    const fs = fakeFs();
+    const decompression = createTestDecompression(fs);
+    await decompression.command("on 60", makeManualCtx());
+    const before = fs.files.get("/proj/.pi/decompression.json");
+    const ctx = makeManualCtx();
+
+    await decompression.command("now", ctx);
+
+    expect(decompression.enabled).toBe(true);
+    expect(fs.files.get("/proj/.pi/decompression.json")).toBe(before);
+  });
+
+  it("rejects an immediate request while busy without aborting or compacting", async () => {
+    const decompression = createTestDecompression();
+    const abort = vi.fn();
+    const compact = vi.fn();
+    const ctx = makeManualCtx({
+      abort,
+      compact,
+      isIdle: () => false,
+    });
+
+    await decompression.command("now", ctx);
+
+    expect(abort).not.toHaveBeenCalled();
+    expect(compact).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: wait until current work settles, then retry",
+      "error",
+    );
+  });
+
+  it("rejects an immediate request when user input is queued", async () => {
+    const decompression = createTestDecompression();
+    const compact = vi.fn();
+    const ctx = makeManualCtx({
+      compact,
+      hasPendingMessages: () => true,
+    });
+
+    await decompression.command("now", ctx);
+
+    expect(compact).not.toHaveBeenCalled();
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: wait until current work settles, then retry",
+      "error",
+    );
+  });
+
+  it("rejects duplicate immediate requests while compaction is active", async () => {
+    const decompression = createTestDecompression();
+    const ctx = makeManualCtx();
+
+    await decompression.command("now", ctx);
+    await decompression.command("now", ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: decompression already in progress",
+      "error",
+    );
+  });
+
+  it("reports immediate compaction failure and allows retry", async () => {
+    const decompression = createTestDecompression();
+    const ctx = makeManualCtx();
+
+    await decompression.command("now", ctx);
+    const firstOptions = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onError?: (error: Error) => void;
+    };
+    firstOptions.onError?.(new Error("Nothing to compact"));
+    await decompression.command("now", ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(2);
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: manual decompression failed (Nothing to compact)",
+      "error",
+    );
+  });
+
+  it("reports synchronous no-history rejection and clears the request", async () => {
+    const decompression = createTestDecompression();
+    const compact = vi.fn(() => {
+      throw new Error("Nothing to compact");
+    });
+    const ctx = makeManualCtx({ compact });
+
+    await expect(decompression.command("now", ctx)).resolves.toBeUndefined();
+    await decompression.command("now", ctx);
+
+    expect(compact).toHaveBeenCalledTimes(2);
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: manual decompression failed (Nothing to compact)",
+      "error",
+    );
+  });
+
+  it("normalizes non-Error synchronous compaction rejection", async () => {
+    const decompression = createTestDecompression();
+    const compact = vi.fn(() => {
+      throw "Nothing to compact";
+    });
+    const ctx = makeManualCtx({ compact });
+
+    await decompression.command("now", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "decompression: manual decompression failed (Nothing to compact)",
+      "error",
+    );
+  });
+
+  it("disarms automatic threshold after successful immediate compaction", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeManualCtx());
+    const manual = makeManualCtx();
+
+    await decompression.command("now", manual);
+    const options = vi.mocked(manual.compact).mock.calls[0]?.[0] as {
+      onComplete?: () => void;
+    };
+    options.onComplete?.();
+
+    const usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const settled = makeSettledCtx({ getContextUsage: () => usage });
+    await decompression.onAgentSettled({ type: "agent_settled" }, settled);
+
+    expect(settled.compact).not.toHaveBeenCalled();
   });
 
   it("beforeCompact writes a handoff file and returns a pointer result", async () => {

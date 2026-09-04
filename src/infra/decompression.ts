@@ -142,8 +142,9 @@ export function createDecompression(
   let nextDecompressionId = 0;
   type DecompressionRequest = {
     id: number;
+    source: "automatic-active" | "automatic-idle" | "manual-idle";
     interrupted: boolean;
-    usage: UsageSnapshot;
+    usage?: UsageSnapshot;
     compacted?: boolean;
   };
   let pendingDecompression: DecompressionRequest | undefined;
@@ -206,6 +207,32 @@ export function createDecompression(
       case "status":
         notify(ctx, describeState());
         break;
+      case "decompressNow": {
+        if (pendingDecompression || activeDecompression) {
+          notify(
+            ctx,
+            "decompression: decompression already in progress",
+            "error",
+          );
+          break;
+        }
+        if (!ctx.isIdle() || ctx.hasPendingMessages()) {
+          notify(
+            ctx,
+            "decompression: wait until current work settles, then retry",
+            "error",
+          );
+          break;
+        }
+        const manualDecompression: DecompressionRequest = {
+          id: ++nextDecompressionId,
+          source: "manual-idle",
+          interrupted: false,
+        };
+        pendingDecompression = manualDecompression;
+        startDecompression(ctx, manualDecompression);
+        break;
+      }
       case "setThreshold":
         thresholdPercent = command.percent;
         thresholdArmed = true;
@@ -241,11 +268,13 @@ export function createDecompression(
     if (sameUsage(usage, lastHandledUsage)) return;
     if (pendingDecompression || activeDecompression) return;
 
-    pendingDecompression = {
+    const activeRequest: DecompressionRequest = {
       id: ++nextDecompressionId,
+      source: "automatic-active",
       interrupted: true,
       usage,
     };
+    pendingDecompression = activeRequest;
     notify(
       ctx,
       `context at ${usage.percent}%, threshold ${thresholdPercent}% — stopping at turn boundary`,
@@ -277,8 +306,9 @@ export function createDecompression(
     if (!usage || !observeThreshold(usage)) return;
     if (sameUsage(usage, lastHandledUsage)) return;
 
-    const idleDecompression = {
+    const idleDecompression: DecompressionRequest = {
       id: ++nextDecompressionId,
+      source: "automatic-idle",
       interrupted: false,
       usage,
     };
@@ -292,14 +322,27 @@ export function createDecompression(
   ): void {
     if (activeDecompression || pendingDecompression?.id !== request.id) return;
     activeDecompression = request;
-    notify(
-      ctx,
-      `context at ${request.usage.percent}%, threshold ${thresholdPercent}% — decompressing`,
-    );
-    ctx.compact({
-      onComplete: () => finishDecompression(ctx, request, true),
-      onError: (error) => finishDecompression(ctx, request, false, error),
-    });
+    if (request.source === "manual-idle") {
+      notify(ctx, "decompression: compacting handoff now");
+    } else {
+      notify(
+        ctx,
+        `context at ${request.usage?.percent}%, threshold ${thresholdPercent}% — decompressing`,
+      );
+    }
+    try {
+      ctx.compact({
+        onComplete: () => finishDecompression(ctx, request, true),
+        onError: (error) => finishDecompression(ctx, request, false, error),
+      });
+    } catch (error) {
+      finishDecompression(
+        ctx,
+        request,
+        false,
+        error instanceof Error ? error : new Error(String(error)),
+      );
+    }
   }
 
   function finishDecompression(
@@ -316,11 +359,11 @@ export function createDecompression(
 
     if (!succeeded) {
       const detail = error?.message || "cancelled";
-      notify(
-        ctx,
-        `decompression: automatic decompression failed (${detail}); interrupted work was not resumed`,
-        "error",
-      );
+      const message =
+        request.source === "manual-idle"
+          ? `decompression: manual decompression failed (${detail})`
+          : `decompression: automatic decompression failed (${detail}); interrupted work was not resumed`;
+      notify(ctx, message, "error");
       return;
     }
 
@@ -328,6 +371,9 @@ export function createDecompression(
     thresholdArmed = false;
     statusUsagePercent = undefined;
     updateStatus(ctx, currentState());
+    if (request.source === "manual-idle") {
+      notify(ctx, "decompression: completed");
+    }
     resumeInterrupted(ctx, request);
   }
 
@@ -444,7 +490,8 @@ export function createDecompression(
     event: SessionBeforeCompactEvent,
     ctx: ExtensionContext,
   ): Promise<BeforeCompactResult | undefined> {
-    if (!enabled) return undefined;
+    if (!enabled && activeDecompression?.source !== "manual-idle")
+      return undefined;
 
     const { preparation } = event;
     const messages = [

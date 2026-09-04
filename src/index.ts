@@ -12,12 +12,12 @@ export default function piDecompression(pi: ExtensionAPI): void {
 
   const command = {
     description:
-      "Decompression with handoff context (/decompress [on|off] [threshold])",
+      "Decompression with handoff context (/decompress [on|off|now] [threshold])",
     handler: decompression.command,
   };
   pi.registerCommand("decompress", command);
   pi.registerCommand("break", {
-    description: "Decompression alias (/break [on|off] [threshold])",
+    description: "Decompression alias (/break [on|off|now] [threshold])",
     handler: command.handler,
   });
   pi.on("session_start", decompression.onSessionStart);

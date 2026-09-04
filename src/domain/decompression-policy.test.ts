@@ -32,6 +32,17 @@ describe("parseDecompressionArgs", () => {
     });
   });
 
+  it("parses now as an immediate decompression request", () => {
+    expect(parseDecompressionArgs("now")).toEqual({ action: "decompressNow" });
+    expect(parseDecompressionArgs("NOW")).toEqual({ action: "decompressNow" });
+  });
+
+  it("rejects now with extra arguments or as a toggle threshold", () => {
+    expect(parseDecompressionArgs("now 60")).toEqual({ action: "invalid" });
+    expect(parseDecompressionArgs("now please")).toEqual({ action: "invalid" });
+    expect(parseDecompressionArgs("on now")).toEqual({ action: "invalid" });
+  });
+
   it("parses a bare threshold as setThreshold", () => {
     expect(parseDecompressionArgs("60")).toEqual({
       action: "setThreshold",

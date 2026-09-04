@@ -21,8 +21,8 @@ Pi should start without an extension load error. The extension registers `/decom
 Both commands share the exact same handler and persisted state:
 
 ```text
-/decompress [on|off] [threshold]
-/break [on|off] [threshold]
+/decompress [on|off|now] [threshold]
+/break [on|off|now] [threshold]
 ```
 
 Examples:
@@ -31,6 +31,9 @@ Examples:
 - `/break on` or `/break off` — enable or disable automatic decompression.
 - `/break 60` — set the context threshold to 60%.
 - `/decompress on 60` — enable decompression and set its threshold.
+- `/break now` or `/decompress now` — immediately compact a handoff while Pi is idle.
+
+`now` preserves automatic settings and persisted state, uses the same handoff compaction path, and never resumes an already-idle task. Busy sessions and queued user messages are rejected safely; wait until work settles and retry. Automatic threshold decompression remains the only path that synthesizes a continuation.
 
 When enabled with a threshold, the Pi footer shows `decompression 55% left/60%`, where `left` is the unused total model context capacity (not the distance to the decompression threshold). Usage is rounded up for a compact display, clamped to `0%` at or above full context, and shown as `decompression -- left/60%` when unavailable. Without a configured threshold it shows `decompression on:no-threshold`. Disabling decompression clears this footer item.
 

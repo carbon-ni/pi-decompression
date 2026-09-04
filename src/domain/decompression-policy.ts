@@ -8,11 +8,12 @@ export type DecompressionCommand =
   | { action: "enable"; threshold: number | null }
   | { action: "disable"; threshold: number | null }
   | { action: "setThreshold"; percent: number }
+  | { action: "decompressNow" }
   | { action: "invalid" };
 
 /**
- * Positional syntax: /decompress [on|off] [threshold]
- * No args shows status; a bare integer sets the threshold only.
+ * Positional syntax: /decompress [on|off|now] [threshold]
+ * No args shows status; `now` requests immediate decompression; a bare integer sets the threshold only.
  */
 export function parseDecompressionArgs(args: string): DecompressionCommand {
   const words = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
@@ -27,6 +28,10 @@ export function parseDecompressionArgs(args: string): DecompressionCommand {
   switch (keyword) {
     case undefined:
       return { action: "status" };
+    case "now":
+      return words.length === 1
+        ? { action: "decompressNow" }
+        : { action: "invalid" };
     case "on":
     case "off": {
       if (words.length > 2) return { action: "invalid" };

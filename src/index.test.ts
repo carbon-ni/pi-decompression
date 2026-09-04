@@ -15,11 +15,11 @@ it("registers /decompress and its coffee-break alias", () => {
 
   expect(registerCommand).toHaveBeenCalledWith("decompress", {
     description:
-      "Decompression with handoff context (/decompress [on|off] [threshold])",
+      "Decompression with handoff context (/decompress [on|off|now] [threshold])",
     handler: expect.any(Function),
   });
   expect(registerCommand).toHaveBeenCalledWith("break", {
-    description: "Decompression alias (/break [on|off] [threshold])",
+    description: "Decompression alias (/break [on|off|now] [threshold])",
     handler: expect.any(Function),
   });
 });
