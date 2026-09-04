@@ -1,7 +1,7 @@
 ---
 id: TASK-0005
 title: Prove pi-decompression release readiness
-status: todo
+status: doing
 depends_on: []
 priority: high
 tags: [release, package, qa]
