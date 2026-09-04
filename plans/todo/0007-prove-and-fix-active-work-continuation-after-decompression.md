@@ -22,6 +22,18 @@ When active work crosses configured threshold, Pi preserves completed turn, comp
 - Pi 0.85 documentation says `sendUserMessage()` throws during streaming unless `deliverAs` is supplied.
 - Current adapter calls `pi.sendUserMessage(message)` without delivery option from compaction completion callback. Treat this as hypothesis, not proven root cause.
 
+## Observed reproduction
+
+Real Pi produced this exact failure after a successful compaction:
+
+```text
+Extension "<runtime>" error: Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.
+```
+
+This confirms continuation is attempted while Pi still considers agent active. Current `pi.sendUserMessage(message)` call lacks explicit follow-up delivery semantics, so Pi rejects message instead of queueing it. User's original diagnosis is correct.
+
+Same run later retriggered decompression while post-compaction context remained about 45% against 40% threshold and failed with `Nothing to compact (session too small)`. Treat this as related regression evidence: continuation fix must not create compact/resume loop, and test should distinguish one interrupted cycle from later irreducible high usage.
+
 ## Acceptance criteria
 - [ ] Add deterministic full-path test that loads real extension through Pi SDK/runtime rather than directly calling extension handlers.
 - [ ] Script model behavior so active goal needs another turn, first completed turn crosses threshold, compaction returns usable handoff, and resumed turn emits unique marker such as `ORIGINAL_GOAL_RESUMED`.
@@ -32,6 +44,8 @@ When active work crosses configured threshold, Pi preserves completed turn, comp
 - [ ] Add unhappy-path proof that compaction failure emits error and never sends/runs continuation.
 - [ ] Preserve queued-user-message behavior: real queued input is not overtaken or duplicated by synthetic continuation.
 - [ ] Reproduce scenario with repository-pinned Pi 0.84.4 and user's installed Pi version; record version-specific difference if any.
+- [ ] New full-path test reproduces rejected continuation with equivalent `Agent is already processing` failure before production change.
+- [ ] Successful fix queues continuation explicitly as follow-up when Pi remains active during compaction completion; test proves it is later delivered exactly once.
 - [ ] Production code is unchanged until new full-path test fails for observed reason.
 - [ ] Smallest evidence-backed fix makes new regression test pass without weakening existing active, idle, queue, collision, failure, and stale-usage tests.
 - [ ] README describes actual ordering precisely: stop boundary, compaction, and when continuation is queued/delivered.
@@ -77,7 +91,7 @@ Instrument test trace around compaction callback:
 Do not encode assumed fix before knowing which transition fails.
 
 ### Green — choose fix from evidence
-- If post-compaction `sendUserMessage` throws because Pi is still streaming, supply explicit `deliverAs: "followUp"` through adapter contract and test its queue/delivery ordering.
+- **Confirmed path:** post-compaction `sendUserMessage` throws because Pi is still processing. Supply explicit `deliverAs: "followUp"` through adapter contract and test its queue/delivery ordering. Keep delivery decision explicit at composition root.
 - If compaction completion callback is not reached, reconcile request state with `session_compact` event and ensure exactly one owner resumes.
 - If Pi accepts message but does not run it, verify queue state and trigger semantics before moving injection earlier.
 - Queue continuation before compaction only if runtime test proves Pi retains it, does not execute it before compaction, and does not prevent `agent_settled`/compaction. Pi defines `agent_settled` as having no follow-up left, so pre-queueing can change lifecycle and must not be guessed.
