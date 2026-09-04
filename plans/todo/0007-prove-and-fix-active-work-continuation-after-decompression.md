@@ -124,7 +124,9 @@ Keep one continuation owner and one delivery adapter. Remove temporary instrumen
 - Secondary loop reproduced red and fixed across both idle and active paths: `5262e85` introduced threshold disarming; `b1a6ae6` added shared `observeThreshold()` plus active `onTurnEnd` regression coverage.
 - Above-threshold post-compaction usage no longer retriggers; observed below-threshold usage re-arms a later crossing.
 - Funzzy `verify @agent-final` passes through watcher generation 3.
-- Still required before closing: deterministic full-runtime semantic-marker proof on actual Pi lifecycle.
+- Added `src/index.integration.test.ts`: Pi SDK 0.84.4 loads the real extension entrypoint with `DefaultResourceLoader`, `SessionManager.inMemory()`, and an offline faux provider. It proves original goal → completed pre-threshold assistant turn → exactly one compaction entry/event → one synthetic continuation → `ORIGINAL_GOAL_RESUMED`, plus no assistant turn starts between the threshold boundary and compaction.
+- The repository-pinned 0.84.4 SDK passes the semantic test. A controlled run with the old no-option call also passes on 0.84.4, so the previously observed `Agent is already processing` rejection is not reproducible in this SDK lifecycle; the installed Pi CLI is 0.85.0 and remains the version-specific source of that evidence.
+- README now documents the stop boundary, compaction, and queued follow-up ordering.
 
 ## Evidence to retain
 - Pi version under test.
