@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createHandoffStore, type HandoffFs } from "./handoff-store.js";
 
-function fakeFs(): HandoffFs & { files: Map<string, string>; dirs: Set<string> } {
+function fakeFs(): HandoffFs & {
+  files: Map<string, string>;
+  dirs: Set<string>;
+} {
   const files = new Map<string, string>();
   const dirs = new Set<string>();
   return {
@@ -25,11 +28,23 @@ function fakeFs(): HandoffFs & { files: Map<string, string>; dirs: Set<string> }
       const prefix = path.endsWith("/") ? path : `${path}/`;
       return [
         ...[...dirs]
-          .filter((d) => d.startsWith(prefix) && !d.slice(prefix.length).includes("/"))
-          .map((name) => ({ name: name.slice(prefix.length), isDirectory: true })),
+          .filter(
+            (d) =>
+              d.startsWith(prefix) && !d.slice(prefix.length).includes("/"),
+          )
+          .map((name) => ({
+            name: name.slice(prefix.length),
+            isDirectory: true,
+          })),
         ...[...files.keys()]
-          .filter((f) => f.startsWith(prefix) && !f.slice(prefix.length).includes("/"))
-          .map((name) => ({ name: name.slice(prefix.length), isDirectory: false })),
+          .filter(
+            (f) =>
+              f.startsWith(prefix) && !f.slice(prefix.length).includes("/"),
+          )
+          .map((name) => ({
+            name: name.slice(prefix.length),
+            isDirectory: false,
+          })),
       ];
     },
   };
@@ -84,11 +99,14 @@ describe("createHandoffStore", () => {
     fs.dirs.add(`${DIR}/handoffs/2026-04-13`);
     const list = fs.readdir;
     fs.readdir = async (path) => {
-      if (path === `${DIR}/handoffs/2026-04-13`) throw new Error("permission denied");
+      if (path === `${DIR}/handoffs/2026-04-13`)
+        throw new Error("permission denied");
       return list(path);
     };
 
-    await expect(createHandoffStore(fs).readLatest(DIR, "s1")).resolves.toBeUndefined();
+    await expect(
+      createHandoffStore(fs).readLatest(DIR, "s1"),
+    ).resolves.toBeUndefined();
   });
 
   it("ignores files where date directories or handoff entries are expected", async () => {
@@ -97,21 +115,25 @@ describe("createHandoffStore", () => {
     fs.dirs.add(`${DIR}/handoffs/2026-04-13`);
     fs.dirs.add(`${DIR}/handoffs/2026-04-13/entry-dir`);
 
-    await expect(createHandoffStore(fs).readLatest(DIR, "s1")).resolves.toBeUndefined();
+    await expect(
+      createHandoffStore(fs).readLatest(DIR, "s1"),
+    ).resolves.toBeUndefined();
   });
 
   it("fails rather than overwriting when all suffixes are occupied", async () => {
     const fs = fakeFs();
     fs.readFile = async () => "occupied";
 
-    await expect(createHandoffStore(fs).write(DIR, "s1", "content", NOW)).rejects.toThrow(
-      "no free handoff filename",
-    );
+    await expect(
+      createHandoffStore(fs).write(DIR, "s1", "content", NOW),
+    ).rejects.toThrow("no free handoff filename");
   });
 
   it("uses the default filesystem adapter", async () => {
-    await expect(createHandoffStore().readLatest("/tmp/pi-compactor-missing", "s1")).resolves.toBeUndefined();
-    const dir = await mkdtemp(join(tmpdir(), "pi-compactor-"));
+    await expect(
+      createHandoffStore().readLatest("/tmp/pi-decompression-missing", "s1"),
+    ).resolves.toBeUndefined();
+    const dir = await mkdtemp(join(tmpdir(), "pi-decompression-"));
     try {
       const store = createHandoffStore();
       await store.write(dir, "s1", "content", NOW);

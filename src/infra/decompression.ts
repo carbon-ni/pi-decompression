@@ -13,18 +13,18 @@ import {
   type TurnEndEvent,
 } from "@earendil-works/pi-coding-agent";
 import {
-  buildHandoffCompaction,
+  buildHandoffDecompression,
   buildHandoffPrompt,
   isUsableHandoff,
-  parseCompactorArgs,
-  shouldCompactAt,
-  type CompactorCommand,
-  type CompactorState,
-} from "../domain/compactor-policy.js";
+  parseDecompressionArgs,
+  shouldDecompressAt,
+  type DecompressionCommand,
+  type DecompressionState,
+} from "../domain/decompression-policy.js";
 import {
-  createCompactorConfig,
-  type CompactorConfigStore,
-} from "./compactor-config.js";
+  createDecompressionConfig,
+  type DecompressionConfigStore,
+} from "./decompression-config.js";
 import { createHandoffStore, type HandoffStore } from "./handoff-store.js";
 
 const MAX_HANDOFF_TOKENS = 8192;
@@ -45,7 +45,10 @@ function getUsage(ctx: ExtensionContext): UsageSnapshot | undefined {
   };
 }
 
-function sameUsage(left: UsageSnapshot | undefined, right: UsageSnapshot | undefined): boolean {
+function sameUsage(
+  left: UsageSnapshot | undefined,
+  right: UsageSnapshot | undefined,
+): boolean {
   return (
     left !== undefined &&
     right !== undefined &&
@@ -60,7 +63,9 @@ function defaultReportsDir(cwd: string): string {
   return join(base, "reports");
 }
 
-type CompleteResponse = Awaited<ReturnType<ExtensionContext["modelRegistry"]["complete"]>>;
+type CompleteResponse = Awaited<
+  ReturnType<ExtensionContext["modelRegistry"]["complete"]>
+>;
 
 /** Structural match for the non-exported SessionBeforeCompactResult. */
 export interface BeforeCompactResult {
@@ -85,7 +90,7 @@ export interface SessionCompactFailedEvent {
   fromExtension: boolean;
 }
 
-export interface Compactor {
+export interface Decompression {
   readonly enabled: boolean;
   command(args: string, ctx: ExtensionCommandContext): Promise<void>;
   beforeCompact(
@@ -93,45 +98,57 @@ export interface Compactor {
     ctx: ExtensionContext,
   ): Promise<BeforeCompactResult | undefined>;
   onTurnEnd(event: TurnEndEvent, ctx: ExtensionContext): Promise<void>;
-  onAgentSettled(event: AgentSettledEvent, ctx: ExtensionContext): Promise<void>;
-  onSessionCompact(event: SessionCompactEvent, ctx: ExtensionContext): Promise<void>;
+  onAgentSettled(
+    event: AgentSettledEvent,
+    ctx: ExtensionContext,
+  ): Promise<void>;
+  onSessionCompact(
+    event: SessionCompactEvent,
+    ctx: ExtensionContext,
+  ): Promise<void>;
   onSessionCompactFailed(
     event: SessionCompactFailedEvent,
     ctx: ExtensionContext,
   ): Promise<void>;
-  onSessionShutdown(event: SessionShutdownEvent, ctx: ExtensionContext): Promise<void>;
-  onSessionStart(event: SessionStartEvent, ctx: ExtensionContext): Promise<void>;
+  onSessionShutdown(
+    event: SessionShutdownEvent,
+    ctx: ExtensionContext,
+  ): Promise<void>;
+  onSessionStart(
+    event: SessionStartEvent,
+    ctx: ExtensionContext,
+  ): Promise<void>;
 }
 
-export function createCompactor(
+export function createDecompression(
   options: {
     store?: HandoffStore;
-    config?: CompactorConfigStore;
+    config?: DecompressionConfigStore;
     uuid?: () => string;
     now?: () => Date;
     reportsDir?: (cwd: string) => string;
     resume?: (message: string) => void;
   } = {},
-): Compactor {
+): Decompression {
   const store = options.store ?? createHandoffStore();
-  const config = options.config ?? createCompactorConfig();
+  const config = options.config ?? createDecompressionConfig();
   const uuid = options.uuid ?? randomUUID;
   const now = options.now ?? (() => new Date());
   const reportsDir = options.reportsDir ?? defaultReportsDir;
   let enabled = false;
   let thresholdPercent: number | null = null;
-  let nextCompactionId = 0;
-  type CompactionRequest = {
+  let nextDecompressionId = 0;
+  type DecompressionRequest = {
     id: number;
     interrupted: boolean;
     usage: UsageSnapshot;
     compacted?: boolean;
   };
-  let pendingCompaction: CompactionRequest | undefined;
-  let activeCompaction: CompactionRequest | undefined;
+  let pendingDecompression: DecompressionRequest | undefined;
+  let activeDecompression: DecompressionRequest | undefined;
   let lastHandledUsage: UsageSnapshot | undefined;
 
-  function currentState(): CompactorState {
+  function currentState(): DecompressionState {
     return { enabled, thresholdPercent };
   }
 
@@ -140,12 +157,18 @@ export function createCompactor(
     try {
       await config.write(ctx.cwd, currentState());
     } catch {
-      notify(ctx, "compactor: could not save state to .pi/compactor.json");
+      notify(
+        ctx,
+        "decompression: could not save state to .pi/decompression.json",
+      );
     }
   }
 
-  async function command(args: string, ctx: ExtensionCommandContext): Promise<void> {
-    const command: CompactorCommand = parseCompactorArgs(args);
+  async function command(
+    args: string,
+    ctx: ExtensionCommandContext,
+  ): Promise<void> {
+    const command: DecompressionCommand = parseDecompressionArgs(args);
     switch (command.action) {
       case "enable":
         enabled = true;
@@ -156,7 +179,7 @@ export function createCompactor(
         break;
       case "disable":
         enabled = false;
-        pendingCompaction = undefined;
+        pendingDecompression = undefined;
         lastHandledUsage = undefined;
         if (command.threshold !== null) thresholdPercent = command.threshold;
         await persistState(ctx);
@@ -172,25 +195,36 @@ export function createCompactor(
         notify(ctx, describeState());
         break;
       case "invalid":
-        notify(ctx, `usage: /compactor [on|off] [threshold] — ${describeState()}`);
+        notify(
+          ctx,
+          `usage: /decompress [on|off] [threshold] — ${describeState()}`,
+        );
         break;
     }
   }
 
   function describeState(): string {
-    const threshold = thresholdPercent === null ? "none" : `${thresholdPercent}%`;
-    return `compactor ${enabled ? "on" : "off"}, threshold ${threshold}`;
+    const threshold =
+      thresholdPercent === null ? "none" : `${thresholdPercent}%`;
+    return `decompression ${enabled ? "on" : "off"}, threshold ${threshold}`;
   }
 
-  async function onTurnEnd(_event: TurnEndEvent, ctx: ExtensionContext): Promise<void> {
+  async function onTurnEnd(
+    _event: TurnEndEvent,
+    ctx: ExtensionContext,
+  ): Promise<void> {
     if (!enabled || thresholdPercent === null) return;
     const usage = getUsage(ctx);
     if (!usage) return;
-    if (!shouldCompactAt(usage.percent, thresholdPercent)) return;
+    if (!shouldDecompressAt(usage.percent, thresholdPercent)) return;
     if (sameUsage(usage, lastHandledUsage)) return;
-    if (pendingCompaction || activeCompaction) return;
+    if (pendingDecompression || activeDecompression) return;
 
-    pendingCompaction = { id: ++nextCompactionId, interrupted: true, usage };
+    pendingDecompression = {
+      id: ++nextDecompressionId,
+      interrupted: true,
+      usage,
+    };
     notify(
       ctx,
       `context at ${usage.percent}%, threshold ${thresholdPercent}% — stopping at turn boundary`,
@@ -200,61 +234,68 @@ export function createCompactor(
     ctx.abort();
   }
 
-  async function onAgentSettled(_event: AgentSettledEvent, ctx: ExtensionContext): Promise<void> {
-    if (pendingCompaction) {
-      if (pendingCompaction.compacted) {
-        const request = pendingCompaction;
-        pendingCompaction = undefined;
+  async function onAgentSettled(
+    _event: AgentSettledEvent,
+    ctx: ExtensionContext,
+  ): Promise<void> {
+    if (pendingDecompression) {
+      if (pendingDecompression.compacted) {
+        const request = pendingDecompression;
+        pendingDecompression = undefined;
         resumeInterrupted(ctx, request);
       } else {
-        startCompaction(ctx, pendingCompaction);
+        startDecompression(ctx, pendingDecompression);
       }
       return;
     }
 
-    if (!enabled || thresholdPercent === null || activeCompaction) return;
+    if (!enabled || thresholdPercent === null || activeDecompression) return;
     const usage = getUsage(ctx);
-    if (!usage || !shouldCompactAt(usage.percent, thresholdPercent)) return;
+    if (!usage || !shouldDecompressAt(usage.percent, thresholdPercent)) return;
     if (sameUsage(usage, lastHandledUsage)) return;
 
-    const idleCompaction = { id: ++nextCompactionId, interrupted: false, usage };
-    pendingCompaction = idleCompaction;
-    startCompaction(ctx, idleCompaction);
+    const idleDecompression = {
+      id: ++nextDecompressionId,
+      interrupted: false,
+      usage,
+    };
+    pendingDecompression = idleDecompression;
+    startDecompression(ctx, idleDecompression);
   }
 
-  function startCompaction(
+  function startDecompression(
     ctx: ExtensionContext,
-    request: CompactionRequest,
+    request: DecompressionRequest,
   ): void {
-    if (activeCompaction || pendingCompaction?.id !== request.id) return;
-    activeCompaction = request;
+    if (activeDecompression || pendingDecompression?.id !== request.id) return;
+    activeDecompression = request;
     notify(
       ctx,
-      `context at ${request.usage.percent}%, threshold ${thresholdPercent}% — compacting`,
+      `context at ${request.usage.percent}%, threshold ${thresholdPercent}% — decompressing`,
     );
     ctx.compact({
-      onComplete: () => finishCompaction(ctx, request, true),
-      onError: (error) => finishCompaction(ctx, request, false, error),
+      onComplete: () => finishDecompression(ctx, request, true),
+      onError: (error) => finishDecompression(ctx, request, false, error),
     });
   }
 
-  function finishCompaction(
+  function finishDecompression(
     ctx: ExtensionContext,
-    request: CompactionRequest,
+    request: DecompressionRequest,
     succeeded: boolean,
     error?: Error,
   ): void {
-    if (activeCompaction?.id !== request.id) return;
-    const wasPending = pendingCompaction?.id === request.id;
-    activeCompaction = undefined;
-    if (wasPending) pendingCompaction = undefined;
+    if (activeDecompression?.id !== request.id) return;
+    const wasPending = pendingDecompression?.id === request.id;
+    activeDecompression = undefined;
+    if (wasPending) pendingDecompression = undefined;
     lastHandledUsage = enabled ? request.usage : undefined;
 
     if (!succeeded) {
       const detail = error?.message || "cancelled";
       notify(
         ctx,
-        `compactor: automatic compaction failed (${detail}); interrupted work was not resumed`,
+        `decompression: automatic decompression failed (${detail}); interrupted work was not resumed`,
         "error",
       );
       return;
@@ -264,13 +305,30 @@ export function createCompactor(
     resumeInterrupted(ctx, request);
   }
 
-  function resumeInterrupted(ctx: ExtensionContext, request: CompactionRequest): void {
-    if (!request.interrupted || !enabled || (ctx.hasPendingMessages?.() ?? false)) return;
+  function resumeInterrupted(
+    ctx: ExtensionContext,
+    request: DecompressionRequest,
+  ): void {
+    if (
+      !request.interrupted ||
+      !enabled ||
+      (ctx.hasPendingMessages?.() ?? false)
+    )
+      return;
     try {
-      options.resume?.("Continue the interrupted user task using the handoff context.");
+      options.resume?.(
+        "Continue the interrupted user task using the handoff context.",
+      );
     } catch (resumeError) {
-      const detail = resumeError instanceof Error ? resumeError.message : String(resumeError);
-      notify(ctx, `compactor: could not resume interrupted work (${detail})`, "error");
+      const detail =
+        resumeError instanceof Error
+          ? resumeError.message
+          : String(resumeError);
+      notify(
+        ctx,
+        `decompression: could not resume interrupted work (${detail})`,
+        "error",
+      );
     }
   }
 
@@ -278,15 +336,15 @@ export function createCompactor(
     event: SessionCompactEvent,
     ctx: ExtensionContext,
   ): Promise<void> {
-    // Our own compaction is completed through onComplete. A Pi/manual compaction
+    // Our own Pi compaction is completed through onComplete. A Pi/manual compaction
     // also satisfies an interrupted request, but Pi will retry or drain queued
     // messages itself when indicated by the event.
-    if (activeCompaction) return;
-    const request = pendingCompaction;
+    if (activeDecompression) return;
+    const request = pendingDecompression;
     if (request) {
       const hasQueuedMessages = ctx.hasPendingMessages?.() ?? false;
       if (event.willRetry || hasQueuedMessages) {
-        pendingCompaction = undefined;
+        pendingDecompression = undefined;
       } else {
         request.compacted = true;
       }
@@ -305,25 +363,35 @@ export function createCompactor(
     // Automatic failures call this before the compact() callback; let that
     // callback own reporting and cleanup. Pi-native/manual failures must not
     // leave an automatic request armed for a later settle event.
-    if (activeCompaction) return;
-    const request = pendingCompaction;
-    pendingCompaction = undefined;
+    if (activeDecompression) return;
+    const request = pendingDecompression;
+    pendingDecompression = undefined;
     const usage = getUsage(ctx);
     if (usage) lastHandledUsage = usage;
     if (request?.interrupted) {
-      notify(ctx, "compactor: compaction failed; interrupted work was not resumed", "error");
+      notify(
+        ctx,
+        "decompression: could not complete; interrupted work was not resumed",
+        "error",
+      );
     }
   }
 
-  async function onSessionShutdown(_event: SessionShutdownEvent, _ctx: ExtensionContext): Promise<void> {
-    pendingCompaction = undefined;
-    activeCompaction = undefined;
+  async function onSessionShutdown(
+    _event: SessionShutdownEvent,
+    _ctx: ExtensionContext,
+  ): Promise<void> {
+    pendingDecompression = undefined;
+    activeDecompression = undefined;
     lastHandledUsage = undefined;
   }
 
-  async function onSessionStart(_event: SessionStartEvent, ctx: ExtensionContext): Promise<void> {
-    pendingCompaction = undefined;
-    activeCompaction = undefined;
+  async function onSessionStart(
+    _event: SessionStartEvent,
+    ctx: ExtensionContext,
+  ): Promise<void> {
+    pendingDecompression = undefined;
+    activeDecompression = undefined;
     lastHandledUsage = undefined;
     if (!ctx.isProjectTrusted()) return;
     const state = await config.read(ctx.cwd);
@@ -339,7 +407,10 @@ export function createCompactor(
     if (!enabled) return undefined;
 
     const { preparation } = event;
-    const messages = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
+    const messages = [
+      ...preparation.messagesToSummarize,
+      ...preparation.turnPrefixMessages,
+    ];
     if (messages.length === 0) return undefined;
 
     const model = ctx.model;
@@ -358,7 +429,11 @@ export function createCompactor(
         model,
         {
           messages: [
-            { role: "user", content: [{ type: "text", text: prompt }], timestamp: Date.now() },
+            {
+              role: "user",
+              content: [{ type: "text", text: prompt }],
+              timestamp: Date.now(),
+            },
           ],
         },
         {
@@ -369,7 +444,10 @@ export function createCompactor(
         },
       );
       handoffText = response.content
-        .filter((block): block is { type: "text"; text: string } => block.type === "text")
+        .filter(
+          (block): block is { type: "text"; text: string } =>
+            block.type === "text",
+        )
         .map((block) => block.text)
         .join("\n");
       usage = response.usage;
@@ -382,7 +460,7 @@ export function createCompactor(
     const handoffFile = await store.write(dir, sessionId, handoffText, now());
     return {
       compaction: {
-        ...buildHandoffCompaction({
+        ...buildHandoffDecompression({
           handoffPath: handoffFile,
           branchEntryIds: event.branchEntries.map((entry) => entry.id),
           fallbackFirstKeptEntryId: preparation.firstKeptEntryId,
@@ -408,6 +486,10 @@ export function createCompactor(
   };
 }
 
-function notify(ctx: ExtensionContext, message: string, type: "info" | "error" = "info"): void {
+function notify(
+  ctx: ExtensionContext,
+  message: string,
+  type: "info" | "error" = "info",
+): void {
   ctx.ui.notify(message, type);
 }

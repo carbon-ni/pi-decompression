@@ -1,5 +1,5 @@
 {
-  description = "pi-compactor extension development shell";
+  description = "pi-decompression extension development shell";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -22,7 +22,7 @@
           ];
 
           shellHook = ''
-            echo "pi-compactor dev shell ready"
+            echo "pi-decompression dev shell ready"
             echo "run: make help"
           '';
         };

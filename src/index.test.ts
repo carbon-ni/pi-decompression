@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { expect, it, vi } from "vitest";
-import piCompactor from "./index.js";
+import piDecompression from "./index.js";
 
-it("registers compactor and its coffee-break alias", () => {
+it("registers /decompress and its coffee-break alias", () => {
   const registerCommand = vi.fn();
   const on = vi.fn();
   const pi = {
@@ -11,19 +11,20 @@ it("registers compactor and its coffee-break alias", () => {
     sendUserMessage: vi.fn(),
   } as unknown as ExtensionAPI;
 
-  piCompactor(pi);
+  piDecompression(pi);
 
-  expect(registerCommand).toHaveBeenCalledWith("compactor", {
-    description: "Handoff compaction (/compactor [on|off] [threshold])",
+  expect(registerCommand).toHaveBeenCalledWith("decompress", {
+    description:
+      "Decompression with handoff context (/decompress [on|off] [threshold])",
     handler: expect.any(Function),
   });
   expect(registerCommand).toHaveBeenCalledWith("break", {
-    description: "Handoff compaction alias (/break [on|off] [threshold])",
+    description: "Decompression alias (/break [on|off] [threshold])",
     handler: expect.any(Function),
   });
 });
 
-it("uses the same command handler for compactor and break", () => {
+it("uses the same command handler for /decompress and /break", () => {
   const registerCommand = vi.fn();
   const pi = {
     registerCommand,
@@ -31,15 +32,16 @@ it("uses the same command handler for compactor and break", () => {
     sendUserMessage: vi.fn(),
   } as unknown as ExtensionAPI;
 
-  piCompactor(pi);
+  piDecompression(pi);
 
   const registrations = registerCommand.mock.calls as Array<
     [string, { handler: unknown }]
   >;
-  const compactor = registrations.find(([name]) => name === "compactor");
+  const decompress = registrations.find(([name]) => name === "decompress");
   const breakAlias = registrations.find(([name]) => name === "break");
 
-  expect(compactor?.[1].handler).toBe(breakAlias?.[1].handler);
+  expect(decompress?.[1].handler).toBe(breakAlias?.[1].handler);
+  expect(registrations.some(([name]) => name === "compactor")).toBe(false);
 });
 
 it("wires turn-boundary interruption and compaction lifecycle handlers", () => {
@@ -50,7 +52,7 @@ it("wires turn-boundary interruption and compaction lifecycle handlers", () => {
     sendUserMessage: vi.fn(),
   } as unknown as ExtensionAPI;
 
-  piCompactor(pi);
+  piDecompression(pi);
 
   expect(on).toHaveBeenCalledWith("turn_end", expect.any(Function));
   expect(on).toHaveBeenCalledWith("agent_settled", expect.any(Function));
@@ -66,13 +68,20 @@ it("resumes through Pi's sendUserMessage adapter after native compaction", async
   const registerCommand = vi.fn();
   const on = vi.fn();
   const sendUserMessage = vi.fn();
-  const pi = { registerCommand, on, sendUserMessage } as unknown as ExtensionAPI;
-  piCompactor(pi);
+  const pi = {
+    registerCommand,
+    on,
+    sendUserMessage,
+  } as unknown as ExtensionAPI;
+  piDecompression(pi);
 
-  const command = registerCommand.mock.calls[0]?.[1] as { handler: (args: string, ctx: unknown) => Promise<void> };
-  const handler = (name: string) => on.mock.calls.find(([event]) => event === name)?.[1] as
-    | ((event: unknown, ctx: unknown) => Promise<void>)
-    | undefined;
+  const command = registerCommand.mock.calls[0]?.[1] as {
+    handler: (args: string, ctx: unknown) => Promise<void>;
+  };
+  const handler = (name: string) =>
+    on.mock.calls.find(([event]) => event === name)?.[1] as
+      | ((event: unknown, ctx: unknown) => Promise<void>)
+      | undefined;
   const ctx = {
     model: { id: "test-model" },
     modelRegistry: { complete: vi.fn() },
@@ -81,7 +90,11 @@ it("resumes through Pi's sendUserMessage adapter after native compaction", async
     isProjectTrusted: () => false,
     hasUI: false,
     ui: { notify: vi.fn() },
-    getContextUsage: () => ({ tokens: 150_000, contextWindow: 200_000, percent: 75 }),
+    getContextUsage: () => ({
+      tokens: 150_000,
+      contextWindow: 200_000,
+      percent: 75,
+    }),
     hasPendingMessages: () => false,
     abort: vi.fn(),
     compact: vi.fn(),
@@ -89,7 +102,10 @@ it("resumes through Pi's sendUserMessage adapter after native compaction", async
 
   await command.handler("on 60", ctx);
   await handler("turn_end")?.({ type: "turn_end" }, ctx);
-  await handler("session_compact")?.({ type: "session_compact", willRetry: false }, ctx);
+  await handler("session_compact")?.(
+    { type: "session_compact", willRetry: false },
+    ctx,
+  );
   await handler("agent_settled")?.({ type: "agent_settled" }, ctx);
 
   expect(sendUserMessage).toHaveBeenCalledWith(

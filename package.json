@@ -1,12 +1,15 @@
 {
-  "name": "pi-compactor",
+  "name": "pi-decompression",
   "version": "0.1.0",
   "private": true,
-  "description": "A guarded starter project for a Pi compaction extension.",
+  "description": "A guarded Pi extension for decompression: rest, unstructured thinking, and informal reflection between turns.",
   "type": "module",
   "keywords": [
     "pi-package",
-    "pi-extension"
+    "pi-extension",
+    "decompression",
+    "handoff",
+    "context-management"
   ],
   "engines": {
     "node": ">=22.19.0"

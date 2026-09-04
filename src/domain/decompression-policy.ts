@@ -1,9 +1,9 @@
 /**
- * Pure compaction policy: command parsing, handoff prompt, and pointer summary.
+ * Pure decompression policy: command parsing, handoff prompt, and pointer summary.
  * No external imports — everything arrives as parameters.
  */
 
-export type CompactorCommand =
+export type DecompressionCommand =
   | { action: "status" }
   | { action: "enable"; threshold: number | null }
   | { action: "disable"; threshold: number | null }
@@ -11,15 +11,17 @@ export type CompactorCommand =
   | { action: "invalid" };
 
 /**
- * Positional syntax: /compactor [on|off] [threshold]
+ * Positional syntax: /decompress [on|off] [threshold]
  * No args shows status; a bare integer sets the threshold only.
  */
-export function parseCompactorArgs(args: string): CompactorCommand {
+export function parseDecompressionArgs(args: string): DecompressionCommand {
   const words = args.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const percentOf = (word: string | undefined): number | undefined => {
     if (word === undefined) return undefined;
     const value = Number(word);
-    return Number.isInteger(value) && value >= 1 && value <= 100 ? value : undefined;
+    return Number.isInteger(value) && value >= 1 && value <= 100
+      ? value
+      : undefined;
   };
   const [keyword, thresholdWord] = words;
   switch (keyword) {
@@ -29,7 +31,8 @@ export function parseCompactorArgs(args: string): CompactorCommand {
     case "off": {
       if (words.length > 2) return { action: "invalid" };
       const threshold = percentOf(thresholdWord);
-      if (thresholdWord !== undefined && threshold === undefined) return { action: "invalid" };
+      if (thresholdWord !== undefined && threshold === undefined)
+        return { action: "invalid" };
       return keyword === "on"
         ? { action: "enable", threshold: threshold ?? null }
         : { action: "disable", threshold: threshold ?? null };
@@ -37,23 +40,30 @@ export function parseCompactorArgs(args: string): CompactorCommand {
     default: {
       if (words.length !== 1) return { action: "invalid" };
       const percent = percentOf(keyword);
-      return percent === undefined ? { action: "invalid" } : { action: "setThreshold", percent };
+      return percent === undefined
+        ? { action: "invalid" }
+        : { action: "setThreshold", percent };
     }
   }
 }
 
-/** Trigger the custom threshold compaction when usage percent reaches the threshold. */
-export function shouldCompactAt(contextPercent: number | null, thresholdPercent: number): boolean {
+/** Trigger decompression when usage percent reaches the configured threshold. */
+export function shouldDecompressAt(
+  contextPercent: number | null,
+  thresholdPercent: number,
+): boolean {
   return contextPercent !== null && contextPercent >= thresholdPercent;
 }
 
-export interface CompactorState {
+export interface DecompressionState {
   enabled: boolean;
   thresholdPercent: number | null;
 }
 
 /** Validate untyped config-file content; undefined means invalid. */
-export function parseCompactorState(data: unknown): CompactorState | undefined {
+export function parseDecompressionState(
+  data: unknown,
+): DecompressionState | undefined {
   if (typeof data !== "object" || data === null) return undefined;
   const record = data as Record<string, unknown>;
   const { enabled, thresholdPercent } = record;
@@ -94,7 +104,9 @@ export function latestHandoffPath(
   paths: readonly string[],
   sessionId: string,
 ): string | undefined {
-  let best: { path: string; date: string; time: string; suffix: number } | undefined;
+  let best:
+    | { path: string; date: string; time: string; suffix: number }
+    | undefined;
   for (const path of paths) {
     const [, date, time, session, suffixText] = HANDOFF_FILE.exec(path) ?? [];
     if (!date || !time || !session || session !== sessionId) continue;
@@ -103,7 +115,9 @@ export function latestHandoffPath(
       !best ||
       candidate.date > best.date ||
       (candidate.date === best.date && candidate.time > best.time) ||
-      (candidate.date === best.date && candidate.time === best.time && candidate.suffix > best.suffix)
+      (candidate.date === best.date &&
+        candidate.time === best.time &&
+        candidate.suffix > best.suffix)
     ) {
       best = candidate;
     }
@@ -113,15 +127,18 @@ export function latestHandoffPath(
 
 export function buildPointerSummary(handoffPath: string): string {
   return (
-    `[Compacted] The full handoff document for this session is at: ${handoffPath}\n` +
+    `[Decompressed] The full handoff document for this session is at: ${handoffPath}\n` +
     "Read that file with your read tool NOW, before doing anything else, " +
     "to recover the working context. Do not answer from memory alone."
   );
 }
 
-export function buildHandoffPrompt(conversationText: string, previousHandoff?: string): string {
+export function buildHandoffPrompt(
+  conversationText: string,
+  previousHandoff?: string,
+): string {
   const previousSection = previousHandoff
-    ? `\nA handoff from an earlier compaction exists. Merge it into the new document; do not lose information.\n<previous-handoff>\n${previousHandoff}\n</previous-handoff>\n`
+    ? `\nA handoff from an earlier decompression exists. Merge it into the new document; do not lose information.\n<previous-handoff>\n${previousHandoff}\n</previous-handoff>\n`
     : "";
   return (
     "You are writing a handoff document for a future instance of this coding agent.\n" +
@@ -136,14 +153,14 @@ export function buildHandoffPrompt(conversationText: string, previousHandoff?: s
   );
 }
 
-export interface HandoffCompactionInput {
+export interface HandoffDecompressionInput {
   handoffPath: string;
   branchEntryIds: readonly string[];
   fallbackFirstKeptEntryId: string;
   tokensBefore: number;
 }
 
-export interface HandoffCompaction {
+export interface HandoffDecompression {
   summary: string;
   firstKeptEntryId: string;
   tokensBefore: number;
@@ -154,8 +171,11 @@ export interface HandoffCompaction {
  * Keep almost nothing: only the newest branch entry survives next to the
  * pointer summary; the handoff file carries the real context.
  */
-export function buildHandoffCompaction(input: HandoffCompactionInput): HandoffCompaction {
-  const firstKeptEntryId = input.branchEntryIds.at(-1) ?? input.fallbackFirstKeptEntryId;
+export function buildHandoffDecompression(
+  input: HandoffDecompressionInput,
+): HandoffDecompression {
+  const firstKeptEntryId =
+    input.branchEntryIds.at(-1) ?? input.fallbackFirstKeptEntryId;
   return {
     summary: buildPointerSummary(input.handoffPath),
     firstKeptEntryId,

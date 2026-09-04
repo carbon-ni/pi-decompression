@@ -22,7 +22,7 @@ When handoff decompression is active, Pi's default footer shows compact status i
 - [ ] On session start in trusted project, restored enabled state appears in footer with restored threshold.
 - [ ] On session start with disabled, missing, malformed, or untrusted configuration, status item is absent.
 - [ ] Status updates immediately after successful command state mutation; persistence failure does not leave footer out of sync with active in-memory state.
-- [ ] Existing command notifications, aliases, threshold behavior, and handoff compaction remain unchanged.
+- [ ] Existing command notifications, aliases, threshold behavior, and handoff decompression remain unchanged.
 - [ ] Deterministic tests cover enabled-with-threshold, enabled-without-threshold, disabled, restored, and invalid/untrusted paths.
 - [ ] README documents footer item and exact displayed forms.
 - [ ] `make check` prints `true`.
