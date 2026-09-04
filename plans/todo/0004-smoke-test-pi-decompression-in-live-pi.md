@@ -1,7 +1,7 @@
 ---
 id: TASK-0004
 title: Smoke-test pi-decompression in live Pi
-status: todo
+status: doing
 depends_on: []
 priority: high
 tags: [qa, tui, decompression]
