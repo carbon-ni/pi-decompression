@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .tmp/
+.pi-funzzy-automatic-responder.json
 *.log
 .DS_Store
 result
