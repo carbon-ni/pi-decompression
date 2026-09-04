@@ -13,25 +13,26 @@ tags: [decompression, status-bar, qol, visibility]
 Footer shows only whether decompression is enabled and configured threshold. Users cannot see how close current context is to threshold, so decompression timing feels surprising.
 
 ## Desired outcome
-While decompression watcher is armed, footer shows remaining percentage points until threshold beside configured threshold. User can predict next decompression without running command.
+While decompression is enabled, footer shows remaining model context capacity beside configured decompression threshold. User can see both overall context headroom and configured trigger without running command.
 
-Recommended compact format:
+Confirmed compact format:
 
 ```text
-decompression 15% left/60%
+decompression 55% left/60%
 ```
 
-Here `left` means percentage points until threshold, not unused model context:
+Here `left` means unused model context, not distance to decompression threshold. At 45% context usage with a 60% decompression threshold:
 
 ```text
-left = max(thresholdPercent - contextUsagePercent, 0)
+left = max(100 - contextUsagePercent, 0) = 55
 ```
 
 ## Acceptance criteria
-- [ ] Enabled state with known usage and threshold renders `decompression <left>% left/<threshold>%`.
-- [ ] Remaining value is derived from same usage and threshold used by watcher; display never becomes second policy source.
-- [ ] Fractional usage has deterministic compact rounding and never displays `0% left` before threshold is actually reached. Recommended: `ceil(max(threshold - usage, 0))`.
-- [ ] At or above threshold, display clamps to `0% left`; it never shows negative value.
+- [ ] Enabled state with known usage and threshold renders `decompression <context-left>% left/<threshold>%`.
+- [ ] Remaining capacity is derived from same context usage observed by watcher; display never becomes second policy source.
+- [ ] Fractional usage has deterministic compact rounding and never displays `0% left` before context is exhausted. Recommended: `ceil(max(100 - usage, 0))`.
+- [ ] At or above 100% context usage, display clamps to `0% left`; it never shows a negative value.
+- [ ] Crossing decompression threshold does not redefine `left`: 60% usage at 60% threshold renders `decompression 40% left/60%` until compaction completes.
 - [ ] Enabled state with threshold but unavailable post-compaction/startup usage renders explicit unknown state: `decompression -- left/60%`.
 - [ ] Enabled state without configured threshold remains `decompression on:no-threshold`.
 - [ ] Disabled state clears footer item.
@@ -40,7 +41,7 @@ left = max(thresholdPercent - contextUsagePercent, 0)
 - [ ] Status formatting remains pure in `src/domain`; Pi usage lookup and `setStatus` stay in `src/infra`.
 - [ ] Existing threshold crossing, continuation, re-arm, notification, and persistence behavior remains unchanged.
 - [ ] Deterministic tests cover known, unknown, below, exact, above, fractional, no-threshold, disabled, command-update, and post-compaction states.
-- [ ] README documents status format and defines `left` as distance to configured usage threshold.
+- [ ] README documents status format and defines `left` as remaining total model context capacity, distinct from configured usage threshold.
 - [ ] Watcher `@agent-final` gate passes.
 
 ## Suggested TDD sequence
@@ -51,10 +52,12 @@ Extend formatter contract to accept optional current usage percent. Add table-dr
 | usage | threshold | expected |
 | ---: | ---: | --- |
 | unavailable | 60 | `decompression -- left/60%` |
-| 45 | 60 | `decompression 15% left/60%` |
-| 44.98 | 60 | `decompression 16% left/60%` |
-| 60 | 60 | `decompression 0% left/60%` |
-| 75 | 60 | `decompression 0% left/60%` |
+| 45 | 60 | `decompression 55% left/60%` |
+| 44.98 | 60 | `decompression 56% left/60%` |
+| 60 | 60 | `decompression 40% left/60%` |
+| 75 | 60 | `decompression 25% left/60%` |
+| 100 | 60 | `decompression 0% left/60%` |
+| 105 | 60 | `decompression 0% left/60%` |
 
 Keep disabled and no-threshold cases in same test table.
 
@@ -81,7 +84,7 @@ Use one status projection helper so command, startup, turn, and compaction paths
 - Keep `src/domain` free of Pi imports and `src/infra` responsible for Pi API calls.
 
 ## Non-goals
-- Showing total token count or model context window.
+- Showing total token count or raw model context-window size.
 - Changing configured threshold semantics.
 - Changing when decompression triggers.
 - Adding ETA or time-based prediction.
