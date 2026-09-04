@@ -1,7 +1,7 @@
 ---
 id: TASK-0012
 title: Keep valid tool-call boundaries after decompression
-status: doing
+status: done
 depends_on: []
 priority: high
 tags: []
@@ -24,14 +24,14 @@ Pi compaction documentation states that valid cut points never begin at tool res
 Post-compaction context never contains a tool result without its matching assistant tool call. Synthetic continuation proceeds normally after a turn containing tool execution.
 
 ## Acceptance criteria
-- [ ] Add a failing regression that represents a trailing assistant tool call plus tool result at compaction.
-- [ ] Compaction uses a Pi-valid kept boundary and never selects an arbitrary trailing tool-result entry.
-- [ ] Full runtime proof exercises tool execution before decompression and reaches a unique resumed marker without provider transcript errors.
-- [ ] Existing handoff pointer, exact-once continuation, queued-user ordering, and loop prevention remain intact.
-- [ ] Empty/minimal branches fall back safely without inventing entry IDs.
-- [ ] Tests cover happy and failure/boundary paths before production change.
-- [ ] README explains that Pi's safe retained boundary preserves tool-call pairing.
-- [ ] Watcher and release gates pass at 100% configured coverage.
+- [x] Add a failing regression that represents a trailing assistant tool call plus tool result at compaction.
+- [x] Compaction uses a Pi-valid kept boundary and never selects an arbitrary trailing tool-result entry.
+- [x] Full runtime proof exercises tool execution before decompression and reaches a unique resumed marker without provider transcript errors.
+- [x] Existing handoff pointer, exact-once continuation, queued-user ordering, and loop prevention remain intact.
+- [x] Empty/minimal branches fall back safely without inventing entry IDs.
+- [x] Tests cover happy and failure/boundary paths before production change.
+- [x] README explains that Pi's safe retained boundary preserves tool-call pairing.
+- [x] Watcher and release gates pass at 100% configured coverage.
 
 ## Constraints
 - Follow Pi's documented compaction cut-point contract.
