@@ -1,7 +1,7 @@
 ---
 id: TASK-0008
 title: Show decompression countdown in status bar
-status: doing
+status: done
 depends_on: [TASK-0007]
 priority: normal
 tags: [decompression, status-bar, qol, visibility]
@@ -28,21 +28,21 @@ left = max(100 - contextUsagePercent, 0) = 55
 ```
 
 ## Acceptance criteria
-- [ ] Enabled state with known usage and threshold renders `decompression <context-left>% left/<threshold>%`.
-- [ ] Remaining capacity is derived from same context usage observed by watcher; display never becomes second policy source.
-- [ ] Fractional usage has deterministic compact rounding and never displays `0% left` before context is exhausted. Recommended: `ceil(max(100 - usage, 0))`.
-- [ ] At or above 100% context usage, display clamps to `0% left`; it never shows a negative value.
-- [ ] Crossing decompression threshold does not redefine `left`: 60% usage at 60% threshold renders `decompression 40% left/60%` until compaction completes.
-- [ ] Enabled state with threshold but unavailable post-compaction/startup usage renders explicit unknown state: `decompression -- left/60%`.
-- [ ] Enabled state without configured threshold remains `decompression on:no-threshold`.
-- [ ] Disabled state clears footer item.
-- [ ] Footer refreshes after completed turns, idle usage observation, successful compaction, state restoration, and `/decompress` or `/break` mutations.
-- [ ] Successful compaction clears stale countdown to unknown until fresh usage is available.
-- [ ] Status formatting remains pure in `src/domain`; Pi usage lookup and `setStatus` stay in `src/infra`.
-- [ ] Existing threshold crossing, continuation, re-arm, notification, and persistence behavior remains unchanged.
-- [ ] Deterministic tests cover known, unknown, below, exact, above, fractional, no-threshold, disabled, command-update, and post-compaction states.
-- [ ] README documents status format and defines `left` as remaining total model context capacity, distinct from configured usage threshold.
-- [ ] Watcher `@agent-final` gate passes.
+- [x] Enabled state with known usage and threshold renders `decompression <context-left>% left/<threshold>%`.
+- [x] Remaining capacity is derived from same context usage observed by watcher; display never becomes second policy source.
+- [x] Fractional usage has deterministic compact rounding and never displays `0% left` before context is exhausted. Recommended: `ceil(max(100 - usage, 0))`.
+- [x] At or above 100% context usage, display clamps to `0% left`; it never shows a negative value.
+- [x] Crossing decompression threshold does not redefine `left`: 60% usage at 60% threshold renders `decompression 40% left/60%` until compaction completes.
+- [x] Enabled state with threshold but unavailable post-compaction/startup usage renders explicit unknown state: `decompression -- left/60%`.
+- [x] Enabled state without configured threshold remains `decompression on:no-threshold`.
+- [x] Disabled state clears footer item.
+- [x] Footer refreshes after completed turns, idle usage observation, successful compaction, state restoration, and `/decompress` or `/break` mutations.
+- [x] Successful compaction clears stale countdown to unknown until fresh usage is available.
+- [x] Status formatting remains pure in `src/domain`; Pi usage lookup and `setStatus` stay in `src/infra`.
+- [x] Existing threshold crossing, continuation, re-arm, notification, and persistence behavior remains unchanged.
+- [x] Deterministic tests cover known, unknown, below, exact, above, fractional, no-threshold, disabled, command-update, and post-compaction states.
+- [x] README documents status format and defines `left` as remaining total model context capacity, distinct from configured usage threshold.
+- [x] Watcher `@agent-final` gate passes.
 
 ## Suggested TDD sequence
 
