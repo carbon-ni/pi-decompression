@@ -1,25 +1,29 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import {
-  DefaultResourceLoader,
-  ModelRuntime,
-  SessionManager,
-  SettingsManager,
-  createAgentSession,
-} from "@earendil-works/pi-coding-agent";
 import type { Context } from "@earendil-works/pi-ai";
 import {
   fauxAssistantMessage,
   fauxProvider,
+  fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+  ModelRuntime,
+  SessionManager,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { afterEach, describe, expect, it } from "vitest";
 import piDecompression from "./index.js";
 
 const ORIGINAL_GOAL = "ORIGINAL_GOAL: finish the deterministic task";
 const CONTINUATION =
   "Continue the interrupted user task using the handoff context.";
 const PRE_THRESHOLD = "PRE_THRESHOLD_TURN_COMPLETE";
+const TOOL_RESULT = "DETERMINISTIC_TOOL_RESULT";
+const TOOL_CALL_ID = "deterministic-tool-call";
 const RESUMED = "ORIGINAL_GOAL_RESUMED";
 const HANDOFF = "## Goal\nThe original goal is still active.";
 
@@ -91,7 +95,13 @@ describe("wired decompression runtime", () => {
       if (contextText.includes("You are writing a handoff document")) {
         return fauxAssistantMessage(HANDOFF);
       }
-      return fauxAssistantMessage(PRE_THRESHOLD);
+      if (contextText.includes(TOOL_RESULT)) {
+        return fauxAssistantMessage(PRE_THRESHOLD);
+      }
+      return fauxAssistantMessage(
+        [fauxToolCall("deterministic_marker", {}, { id: TOOL_CALL_ID })],
+        { stopReason: "toolUse" },
+      );
     };
     faux.setResponses(Array.from({ length: 10 }, () => scriptedResponse));
 
@@ -125,7 +135,21 @@ describe("wired decompression runtime", () => {
       resourceLoader,
       sessionManager,
       settingsManager,
-      noTools: "all",
+      tools: ["deterministic_marker"],
+      customTools: [
+        {
+          name: "deterministic_marker",
+          label: "Deterministic marker",
+          description: "Returns a deterministic marker for integration tests.",
+          parameters: Type.Object({}),
+          async execute() {
+            return {
+              content: [{ type: "text", text: TOOL_RESULT }],
+              details: {},
+            };
+          },
+        },
+      ],
     });
 
     const events: string[] = [];
@@ -191,21 +215,26 @@ describe("wired decompression runtime", () => {
       const originalIndex = messages.findIndex(
         (message) => message.role === "user" && text(message) === ORIGINAL_GOAL,
       );
-      const preThresholdIndex = messages.findIndex(
-        (message) =>
-          message.role === "assistant" && text(message) === PRE_THRESHOLD,
+      const toolCallEntryIndex = entries.findIndex(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.content.some(
+            (block) => block.type === "toolCall" && block.id === TOOL_CALL_ID,
+          ),
+      );
+      const toolResultEntryIndex = entries.findIndex(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "toolResult" &&
+          entry.message.toolCallId === TOOL_CALL_ID &&
+          text(entry.message) === TOOL_RESULT,
       );
       const compactions = entries.filter(
         (entry) => entry.type === "compaction",
       );
       const compactionIndex = entries.findIndex(
         (entry) => entry.type === "compaction",
-      );
-      const preThresholdEntryIndex = entries.findIndex(
-        (entry) =>
-          entry.type === "message" &&
-          entry.message.role === "assistant" &&
-          text(entry.message) === PRE_THRESHOLD,
       );
       const continuationEntryIndex = entries.findIndex(
         (entry) =>
@@ -219,14 +248,17 @@ describe("wired decompression runtime", () => {
           entry.message.role === "assistant" &&
           text(entry.message) === RESUMED,
       );
-      const thresholdCrossingIndex = events.indexOf("turn_end");
       const compactionStartIndex = events.indexOf("compaction_start");
 
       expect(originalIndex).toBeGreaterThanOrEqual(0);
-      expect(preThresholdIndex).toBeGreaterThan(originalIndex);
+      expect(toolCallEntryIndex).toBeGreaterThan(originalIndex);
+      expect(toolResultEntryIndex).toBeGreaterThan(toolCallEntryIndex);
       expect(compactions).toHaveLength(1);
-      expect(preThresholdEntryIndex).toBeGreaterThanOrEqual(0);
-      expect(compactionIndex).toBeGreaterThan(preThresholdEntryIndex);
+      expect(compactionIndex).toBeGreaterThan(toolResultEntryIndex);
+      const compaction = compactions[0];
+      expect(compaction?.firstKeptEntryId).not.toBe(
+        entries[toolResultEntryIndex]?.id,
+      );
       expect(continuationEntryIndex).toBeGreaterThan(compactionIndex);
       expect(resumedEntryIndex).toBeGreaterThan(continuationEntryIndex);
       expect(
@@ -241,8 +273,12 @@ describe("wired decompression runtime", () => {
       expect(events.filter((event) => event === "compaction_end")).toHaveLength(
         1,
       );
+      const lastTurnEndBeforeCompaction = events.lastIndexOf(
+        "turn_end",
+        compactionStartIndex - 1,
+      );
       expect(
-        events.slice(thresholdCrossingIndex + 1, compactionStartIndex),
+        events.slice(lastTurnEndBeforeCompaction + 1, compactionStartIndex),
       ).not.toContain("turn_start");
       expect(extensionErrors).toEqual([]);
     } finally {
