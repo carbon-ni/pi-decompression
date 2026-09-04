@@ -121,7 +121,12 @@ export function createCompactor(
   let enabled = false;
   let thresholdPercent: number | null = null;
   let nextCompactionId = 0;
-  type CompactionRequest = { id: number; interrupted: boolean; usage: UsageSnapshot };
+  type CompactionRequest = {
+    id: number;
+    interrupted: boolean;
+    usage: UsageSnapshot;
+    compacted?: boolean;
+  };
   let pendingCompaction: CompactionRequest | undefined;
   let activeCompaction: CompactionRequest | undefined;
   let lastHandledUsage: UsageSnapshot | undefined;
@@ -201,7 +206,13 @@ export function createCompactor(
         pendingCompaction = undefined;
         return;
       }
-      startCompaction(ctx, pendingCompaction);
+      if (pendingCompaction.compacted) {
+        const request = pendingCompaction;
+        pendingCompaction = undefined;
+        resumeInterrupted(ctx, request);
+      } else {
+        startCompaction(ctx, pendingCompaction);
+      }
       return;
     }
 
@@ -253,7 +264,12 @@ export function createCompactor(
       return;
     }
 
-    if (!wasPending || !request.interrupted || !enabled || (ctx.hasPendingMessages?.() ?? false)) return;
+    if (!wasPending) return;
+    resumeInterrupted(ctx, request);
+  }
+
+  function resumeInterrupted(ctx: ExtensionContext, request: CompactionRequest): void {
+    if (!request.interrupted || !enabled || (ctx.hasPendingMessages?.() ?? false)) return;
     try {
       options.resume?.("Continue the interrupted user task using the handoff context.");
     } catch (resumeError) {
@@ -262,11 +278,26 @@ export function createCompactor(
     }
   }
 
-  async function onSessionCompact(_event: SessionCompactEvent, ctx: ExtensionContext): Promise<void> {
+  async function onSessionCompact(
+    event: SessionCompactEvent,
+    ctx: ExtensionContext,
+  ): Promise<void> {
     // Our own compaction is completed through onComplete. A Pi/manual compaction
-    // supersedes an unstarted automatic request and must never synthesize a turn.
+    // also satisfies an interrupted request, but Pi will retry or drain queued
+    // messages itself when indicated by the event.
     if (activeCompaction) return;
-    pendingCompaction = undefined;
+    const request = pendingCompaction;
+    if (request) {
+      const hasQueuedMessages = ctx.hasPendingMessages?.() ?? false;
+      if (event.willRetry || hasQueuedMessages) {
+        pendingCompaction = undefined;
+      } else {
+        request.compacted = true;
+      }
+      const usage = getUsage(ctx);
+      lastHandledUsage = usage ?? request.usage;
+      return;
+    }
     const usage = getUsage(ctx);
     if (usage) lastHandledUsage = usage;
   }
@@ -279,9 +310,13 @@ export function createCompactor(
     // callback own reporting and cleanup. Pi-native/manual failures must not
     // leave an automatic request armed for a later settle event.
     if (activeCompaction) return;
+    const request = pendingCompaction;
     pendingCompaction = undefined;
     const usage = getUsage(ctx);
     if (usage) lastHandledUsage = usage;
+    if (request?.interrupted) {
+      notify(ctx, "compactor: compaction failed; interrupted work was not resumed", "error");
+    }
   }
 
   async function onSessionShutdown(_event: SessionShutdownEvent, _ctx: ExtensionContext): Promise<void> {

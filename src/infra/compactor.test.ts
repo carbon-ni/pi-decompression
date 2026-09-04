@@ -266,6 +266,75 @@ describe("threshold watcher", () => {
     expect(resume).toHaveBeenCalledTimes(1);
   });
 
+  it("resumes after native compaction satisfies a pending interruption", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onSessionCompact(
+      {
+        type: "session_compact",
+        reason: "threshold",
+        fromExtension: false,
+        willRetry: false,
+        compactionEntry: {},
+      } as SessionCompactEvent,
+      ctx,
+    );
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("resumes after manual compaction satisfies a pending interruption", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onSessionCompact(
+      {
+        type: "session_compact",
+        reason: "manual",
+        fromExtension: false,
+        willRetry: false,
+        compactionEntry: {},
+      } as SessionCompactEvent,
+      ctx,
+    );
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not synthesize after native compaction that retries or drains a queue", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn(), hasPendingMessages: () => true });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onSessionCompact(
+      {
+        type: "session_compact",
+        reason: "overflow",
+        fromExtension: false,
+        willRetry: true,
+        compactionEntry: {},
+      } as SessionCompactEvent,
+      ctx,
+    );
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
+  });
+
   it("clears an in-flight continuation when /break off wins after compaction starts", async () => {
     const resume = vi.fn();
     const compactor = createTestCompactor(fakeFs(), { resume });
