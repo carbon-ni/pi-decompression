@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   DefaultResourceLoader,
@@ -14,6 +14,7 @@ import {
   fauxAssistantMessage,
   fauxProvider,
 } from "@earendil-works/pi-ai/providers/faux";
+import piDecompression from "./index.js";
 
 const ORIGINAL_GOAL = "ORIGINAL_GOAL: finish the deterministic task";
 const CONTINUATION =
@@ -104,7 +105,7 @@ describe("wired decompression runtime", () => {
       cwd,
       agentDir: join(cwd, ".agent"),
       settingsManager,
-      additionalExtensionPaths: [resolve("src/index.ts")],
+      extensionFactories: [piDecompression],
     });
     await resourceLoader.reload();
     const modelRuntime = await ModelRuntime.create({

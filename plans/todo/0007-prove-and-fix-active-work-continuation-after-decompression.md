@@ -43,10 +43,10 @@ Same run later retriggered decompression while post-compaction context remained 
 - [ ] Assert continuation message is accepted by Pi, appears in session context, and results in resumed assistant output.
 - [ ] Add unhappy-path proof that compaction failure emits error and never sends/runs continuation.
 - [ ] Preserve queued-user-message behavior: real queued input is not overtaken or duplicated by synthetic continuation.
-- [ ] Reproduce scenario with repository-pinned Pi 0.84.4 and user's installed Pi version; record version-specific difference if any.
-- [ ] New full-path test reproduces rejected continuation with equivalent `Agent is already processing` failure before production change.
+- [ ] Exercise the repository-pinned Pi 0.84.4 runtime and, when an equivalent offline harness exists, the installed Pi version; otherwise record the installed version and observed error as version-specific evidence without claiming equivalent reproduction.
+- [ ] New full-path test reproduces the rejected continuation with an equivalent `Agent is already processing` failure before production change when the target runtime exposes that failure. If the pinned SDK accepts the old call, record the controlled no-option pass and retain focused adapter red evidence instead of fabricating a full-path red result.
 - [ ] Successful fix queues continuation explicitly as follow-up when Pi remains active during compaction completion; test proves it is later delivered exactly once.
-- [ ] Production code is unchanged until new full-path test fails for observed reason.
+- [ ] Production code is unchanged until the smallest available regression test fails for the observed reason; a focused adapter red test is acceptable when the pinned SDK cannot expose the installed-runtime incompatibility.
 - [ ] Smallest evidence-backed fix makes new regression test pass without weakening existing active, idle, queue, collision, failure, and stale-usage tests.
 - [ ] README describes actual ordering precisely: stop boundary, compaction, and when continuation is queued/delivered.
 - [ ] `make check` passes and coverage remains at configured threshold.
@@ -127,6 +127,7 @@ Keep one continuation owner and one delivery adapter. Remove temporary instrumen
 - Added `src/index.integration.test.ts`: Pi SDK 0.84.4 loads the real extension entrypoint with `DefaultResourceLoader`, `SessionManager.inMemory()`, and an offline faux provider. It proves original goal → completed pre-threshold assistant turn → exactly one compaction entry/event → one synthetic continuation → `ORIGINAL_GOAL_RESUMED`, plus no assistant turn starts between the threshold boundary and compaction.
 - The repository-pinned 0.84.4 SDK passes the semantic test. A controlled run with the old no-option call also passes on 0.84.4, so the previously observed `Agent is already processing` rejection is not reproducible in this SDK lifecycle; the installed Pi CLI is 0.85.0 and remains the version-specific source of that evidence.
 - README now documents the stop boundary, compaction, and queued follow-up ordering.
+- Added an active-threshold rearming regression test so `make coverage` remains at the configured 100% thresholds (113 tests; 100% statements, branches, functions, and lines).
 
 ## Evidence to retain
 - Pi version under test.

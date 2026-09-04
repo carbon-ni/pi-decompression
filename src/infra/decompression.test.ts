@@ -244,6 +244,30 @@ describe("threshold watcher", () => {
     expect(saved).toEqual({ enabled: true, thresholdPercent: 60 });
   });
 
+  it("ignores a turn boundary for the same handled usage after rearming", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    let usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => usage,
+    });
+
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: () => void;
+    };
+    options.onComplete?.();
+
+    usage = { tokens: 100_000, contextWindow: 200_000, percent: 50 };
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+    expect(ctx.abort).not.toHaveBeenCalled();
+  });
+
   it("does not decompress below the threshold", async () => {
     const decompression = createTestDecompression();
     await decompression.command("on", makeCtx<CommandCtx>());
