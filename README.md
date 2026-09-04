@@ -1,8 +1,6 @@
 # pi-compactor
 
-Guarded TypeScript starter for a [Pi extension](https://github.com/earendil-works/pi-mono).
-
-The starter exports an empty extension factory. Compaction policy is intentionally not defined yet; add it through tests when requirements are clear.
+A guarded [Pi extension](https://github.com/earendil-works/pi-mono) that saves a handoff before compaction and can trigger compaction when context usage reaches a configured threshold.
 
 ## Start
 
@@ -14,7 +12,25 @@ make check
 pi -e ./src/index.ts
 ```
 
-Pi should start without an extension load error. The starter registers no commands or tools.
+Pi should start without an extension load error. The extension registers the commands below.
+
+## Commands
+
+`/compactor` and `/break` are aliases that share the same handler and persisted state. Use either command with the same syntax:
+
+```text
+/compactor [on|off] [threshold]
+/break [on|off] [threshold]
+```
+
+Examples:
+
+- `/break` — show the current state.
+- `/break on` or `/break off` — enable or disable automatic compaction.
+- `/break 60` — set the context threshold to 60%.
+- `/break on 60` — enable automatic compaction and set its threshold.
+
+State is persisted in `.pi/compactor.json` for trusted projects. Before Pi compacts, the extension writes a handoff report under `$AGENT_WORKSPACE/reports` (or `.tmp/reports` when `AGENT_WORKSPACE` is unset).
 
 ## Canonical workflow
 

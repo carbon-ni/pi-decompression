@@ -9,9 +9,14 @@ export default function piCompactor(pi: ExtensionAPI): void {
     config: createCompactorConfig(),
   });
 
-  pi.registerCommand("compactor", {
+  const command = {
     description: "Handoff compaction (/compactor [on|off] [threshold])",
     handler: compactor.command,
+  };
+  pi.registerCommand("compactor", command);
+  pi.registerCommand("break", {
+    description: "Handoff compaction alias (/break [on|off] [threshold])",
+    handler: command.handler,
   });
   pi.on("session_start", compactor.onSessionStart);
   pi.on("session_before_compact", compactor.beforeCompact);
