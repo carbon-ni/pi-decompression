@@ -1,7 +1,7 @@
 ---
 id: TASK-0009
 title: Add immediate decompression command
-status: todo
+status: doing
 depends_on: [TASK-0007]
 priority: normal
 tags: [decompression, command, qol, manual]
