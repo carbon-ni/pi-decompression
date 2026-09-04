@@ -1,0 +1,16 @@
+on:
+  change: "**/*.ts"
+
+execution:
+  concurrency: 3
+
+jobs:
+  - name: lint
+    run: "make --no-print-directory lint"
+    parallel: quality-checks
+  - name: typecheck
+    run: "make --no-print-directory typecheck"
+    parallel: quality-checks
+  - name: test
+    run: "make --no-print-directory test"
+    parallel: quality-checks
