@@ -1,7 +1,7 @@
 ---
 id: TASK-0008
 title: Show decompression countdown in status bar
-status: todo
+status: doing
 depends_on: [TASK-0007]
 priority: normal
 tags: [decompression, status-bar, qol, visibility]
