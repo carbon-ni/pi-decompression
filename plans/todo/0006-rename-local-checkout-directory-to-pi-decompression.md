@@ -1,7 +1,7 @@
 ---
 id: TASK-0006
 title: Rename local checkout directory to pi-decompression
-status: todo
+status: doing
 depends_on: []
 priority: normal
 tags: [repository, local, operations]
