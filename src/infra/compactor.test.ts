@@ -187,6 +187,40 @@ describe("threshold watcher", () => {
     expect(ctx.compact).not.toHaveBeenCalled();
   });
 
+  it("ignores turn boundaries without usage, below threshold, or after a handled usage", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const abort = vi.fn();
+    const noUsage = makeSettledCtx({ abort, getContextUsage: () => undefined });
+    await compactor.onTurnEnd(makeTurnEndEvent(), noUsage);
+
+    const below = makeSettledCtx({ abort, getContextUsage: () => ({ tokens: 100, contextWindow: 200, percent: 50 }) });
+    await compactor.onTurnEnd(makeTurnEndEvent(), below);
+
+    const atThreshold = makeSettledCtx({ abort });
+    await compactor.onTurnEnd(makeTurnEndEvent(), atThreshold);
+    await compactor.onSessionCompact(
+      { type: "session_compact", reason: "manual", fromExtension: false, willRetry: false } as SessionCompactEvent,
+      atThreshold,
+    );
+    await compactor.onTurnEnd(makeTurnEndEvent(2), atThreshold);
+
+    expect(abort).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not start a second compaction while one is active", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    await compactor.onSessionCompact({ type: "session_compact", reason: "manual", fromExtension: false } as SessionCompactEvent, ctx);
+    await compactor.onSessionCompactFailed({ type: "session_compact_failed", reason: "manual", aborted: false, willRetry: false, fromExtension: false }, ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
   it("no threshold set means no watching", async () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
@@ -195,6 +229,21 @@ describe("threshold watcher", () => {
     await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("reports config write failures without breaking the command", async () => {
+    const config = {
+      read: vi.fn().mockResolvedValue(undefined),
+      write: vi.fn().mockRejectedValue(new Error("read-only")),
+    };
+    const compactor = createCompactor({ store: createHandoffStore(fakeFs()), config });
+    const ctx = makeCtx<CommandCtx>();
+    await compactor.command("on 60", ctx);
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "compactor: could not save state to .pi/compactor.json",
+      "info",
+    );
   });
 
   it("status reports state and threshold", async () => {
@@ -208,6 +257,14 @@ describe("threshold watcher", () => {
     const message = vi.mocked(ctx.ui.notify).mock.calls.at(-1)?.[0] as string | undefined;
     expect(message).toContain("on");
     expect(message).toContain("60");
+  });
+
+  it("does not inspect turn usage while disabled", async () => {
+    const compactor = createTestCompactor();
+    const getContextUsage = vi.fn();
+    await compactor.onTurnEnd(makeTurnEndEvent(), makeSettledCtx({ getContextUsage }));
+
+    expect(getContextUsage).not.toHaveBeenCalled();
   });
 
   it("requests a safe stop at the completed turn boundary", async () => {
@@ -273,6 +330,10 @@ describe("threshold watcher", () => {
     const ctx = makeSettledCtx({ abort: vi.fn() });
 
     await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    const compactCtx = makeSettledCtx({
+      getContextUsage: () => undefined,
+      hasPendingMessages: undefined,
+    });
     await compactor.onSessionCompact(
       {
         type: "session_compact",
@@ -281,11 +342,11 @@ describe("threshold watcher", () => {
         willRetry: false,
         compactionEntry: {},
       } as SessionCompactEvent,
-      ctx,
+      compactCtx,
     );
 
     expect(ctx.compact).not.toHaveBeenCalled();
-    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, compactCtx);
     expect(resume).toHaveBeenCalledTimes(1);
   });
 
@@ -333,6 +394,71 @@ describe("threshold watcher", () => {
 
     expect(ctx.compact).not.toHaveBeenCalled();
     expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("does not synthesize when native compaction succeeds with a queued message", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn(), hasPendingMessages: () => true });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onSessionCompact(
+      { type: "session_compact", reason: "threshold", fromExtension: false, willRetry: false } as SessionCompactEvent,
+      ctx,
+    );
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("reports resume failures after successful interrupted compaction", async () => {
+    const resume = vi.fn(() => {
+      throw "agent is unavailable";
+    });
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as { onComplete?: () => void };
+    options.onComplete?.();
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "compactor: could not resume interrupted work (agent is unavailable)",
+      "error",
+    );
+  });
+
+  it("reports cancellation when compaction has no error detail", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onError?: (error: Error) => void;
+    };
+    options.onError?.(undefined as unknown as Error);
+
+    expect(vi.mocked(ctx.ui.notify).mock.calls.flat().join(" ")).toContain("cancelled");
+  });
+
+  it("reports Error details when resume fails with an Error", async () => {
+    const resume = vi.fn(() => {
+      throw new Error("agent is unavailable");
+    });
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as { onComplete?: () => void };
+    options.onComplete?.();
+
+    expect(ctx.ui.notify).toHaveBeenCalledWith(
+      "compactor: could not resume interrupted work (agent is unavailable)",
+      "error",
+    );
   });
 
   it("clears an in-flight continuation when /break off wins after compaction starts", async () => {
@@ -414,15 +540,53 @@ describe("threshold watcher", () => {
     expect(vi.mocked(ctx.ui.notify).mock.calls.flat().join(" ")).toContain("cancelled");
   });
 
+  it("clears pending work on native compaction failure", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onSessionCompactFailed(
+      { type: "session_compact_failed", reason: "threshold", aborted: false, willRetry: false, fromExtension: false },
+      ctx,
+    );
+    await compactor.onSessionCompactFailed(
+      { type: "session_compact_failed", reason: "threshold", aborted: false, willRetry: false, fromExtension: false },
+      makeSettledCtx({ getContextUsage: () => undefined }),
+    );
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
+    expect(vi.mocked(ctx.ui.notify).mock.calls.flat().join(" ")).toContain("was not resumed");
+  });
+
+  it("resets lifecycle state on shutdown", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onSessionShutdown({ type: "session_shutdown", reason: "quit" }, ctx);
+    const settledCtx = makeSettledCtx({ getContextUsage: () => undefined });
+    await compactor.onAgentSettled({ type: "agent_settled" }, settledCtx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+    expect(settledCtx.compact).not.toHaveBeenCalled();
+  });
+
   it("never resumes manual compaction", async () => {
     const resume = vi.fn();
     const compactor = createTestCompactor(fakeFs(), { resume });
     await compactor.command("on 60", makeCtx<CommandCtx>());
-    const ctx = makeSettledCtx();
+    const ctx = makeSettledCtx({ getContextUsage: () => undefined });
 
     await compactor.onSessionCompact(
       { type: "session_compact", reason: "manual", fromExtension: false } as SessionCompactEvent,
       ctx,
+    );
+    await compactor.onSessionCompact(
+      { type: "session_compact", reason: "manual", fromExtension: false } as SessionCompactEvent,
+      makeSettledCtx(),
     );
 
     expect(resume).not.toHaveBeenCalled();
@@ -430,6 +594,23 @@ describe("threshold watcher", () => {
 });
 
 describe("createCompactor", () => {
+  it("uses default runtime dependencies when none are supplied", async () => {
+    createCompactor();
+    const fs = fakeFs();
+    const previousWorkspace = process.env.AGENT_WORKSPACE;
+    delete process.env.AGENT_WORKSPACE;
+    try {
+      const compactor = createCompactor({ store: createHandoffStore(fs), config: createCompactorConfig(fs) });
+      await compactor.command("on", makeCtx<CommandCtx>());
+      const result = await compactor.beforeCompact(makeEvent(), makeCtx<BeforeCompactCtx>());
+
+      expect(result?.compaction?.summary).toContain("handoffs");
+    } finally {
+      if (previousWorkspace === undefined) delete process.env.AGENT_WORKSPACE;
+      else process.env.AGENT_WORKSPACE = previousWorkspace;
+    }
+  });
+
   it("is disabled by default: beforeCompact does nothing", async () => {
     const compactor = createTestCompactor();
     const ctx = makeCtx<BeforeCompactCtx>();
@@ -448,7 +629,7 @@ describe("createCompactor", () => {
   it("command 'off' disables it again", async () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
-    await compactor.command("off", makeCtx<CommandCtx>());
+    await compactor.command("off 70", makeCtx<CommandCtx>());
     expect(compactor.enabled).toBe(false);
   });
 

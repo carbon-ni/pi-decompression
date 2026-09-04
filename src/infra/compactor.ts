@@ -202,10 +202,6 @@ export function createCompactor(
 
   async function onAgentSettled(_event: AgentSettledEvent, ctx: ExtensionContext): Promise<void> {
     if (pendingCompaction) {
-      if (!enabled || thresholdPercent === null) {
-        pendingCompaction = undefined;
-        return;
-      }
       if (pendingCompaction.compacted) {
         const request = pendingCompaction;
         pendingCompaction = undefined;
