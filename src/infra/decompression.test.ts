@@ -183,10 +183,7 @@ describe("threshold watcher", () => {
 
     await decompression.command("on 60", ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
-      "decompression",
-      "decompression -- left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("decompression", "--");
   });
 
   it("shows an explicit status when enabled without a threshold", async () => {
@@ -197,7 +194,7 @@ describe("threshold watcher", () => {
 
     expect(ctx.ui.setStatus).toHaveBeenCalledWith(
       "decompression",
-      "decompression on:no-threshold",
+      "on:no-threshold",
     );
   });
 
@@ -225,10 +222,7 @@ describe("threshold watcher", () => {
 
     await decompression.command("on 60", ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenCalledWith(
-      "decompression",
-      "decompression -- left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("decompression", "--");
   });
 
   it("enables and arms the threshold in one command: on 60", async () => {
@@ -423,10 +417,7 @@ describe("threshold watcher", () => {
 
     await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
-      "decompression",
-      "decompression 16% left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith("decompression", "16%");
   });
 
   it("shows unknown usage after an unavailable observation", async () => {
@@ -436,10 +427,7 @@ describe("threshold watcher", () => {
 
     await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
 
-    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
-      "decompression",
-      "decompression -- left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith("decompression", "--");
     expect(ctx.compact).not.toHaveBeenCalled();
   });
 
@@ -460,7 +448,7 @@ describe("threshold watcher", () => {
 
     expect(commandCtx.ui.setStatus).toHaveBeenLastCalledWith(
       "decompression",
-      "decompression 15% left/60%",
+      "15%",
     );
   });
 
@@ -477,20 +465,14 @@ describe("threshold watcher", () => {
     });
 
     await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
-    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
-      "decompression",
-      "decompression 0% left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith("decompression", "0%");
     await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
     const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
       onComplete?: () => void;
     };
     options.onComplete?.();
 
-    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
-      "decompression",
-      "decompression -- left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith("decompression", "--");
   });
 
   it("does not inspect turn usage while disabled", async () => {
@@ -1341,10 +1323,7 @@ describe("config persistence", () => {
       ctx,
     );
 
-    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
-      "decompression",
-      "decompression -- left/60%",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith("decompression", "--");
   });
 
   it("clears status for disabled, malformed, missing, and untrusted config", async () => {

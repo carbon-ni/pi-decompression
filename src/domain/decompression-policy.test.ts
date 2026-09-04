@@ -97,17 +97,17 @@ describe("parseDecompressionArgs", () => {
 
 describe("formatDecompressionStatus", () => {
   it.each([
-    [undefined, 60, "decompression -- left/60%"],
-    [null, 60, "decompression -- left/60%"],
-    [10, 50, "decompression 40% left/50%"],
-    [44.98, 60, "decompression 16% left/60%"],
-    [45, 60, "decompression 15% left/60%"],
-    [59.99, 60, "decompression 1% left/60%"],
-    [60, 60, "decompression 0% left/60%"],
-    [75, 60, "decompression 0% left/60%"],
-    [99.99, 60, "decompression 0% left/60%"],
-    [100, 60, "decompression 0% left/60%"],
-    [105, 60, "decompression 0% left/60%"],
+    [undefined, 60, "--"],
+    [null, 60, "--"],
+    [10, 50, "40%"],
+    [44.98, 60, "16%"],
+    [45, 60, "15%"],
+    [59.99, 60, "1%"],
+    [60, 60, "0%"],
+    [75, 60, "0%"],
+    [99.99, 60, "0%"],
+    [100, 60, "0%"],
+    [105, 60, "0%"],
   ] as const)(
     "formats %s usage with threshold %s",
     (usage, threshold, expected) => {
@@ -123,7 +123,7 @@ describe("formatDecompressionStatus", () => {
   it("formats enabled state without a threshold", () => {
     expect(
       formatDecompressionStatus({ enabled: true, thresholdPercent: null }, 45),
-    ).toBe("decompression on:no-threshold");
+    ).toBe("on:no-threshold");
   });
 
   it("clears disabled state", () => {
