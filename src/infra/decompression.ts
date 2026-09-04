@@ -15,9 +15,11 @@ import {
 import {
   buildHandoffDecompression,
   buildHandoffPrompt,
+  classifyDecompressionThreshold,
   type DecompressionCommand,
   type DecompressionState,
   formatDecompressionStatus,
+  hardThresholdPercent,
   isUsableHandoff,
   parseDecompressionArgs,
   shouldDecompressAt,
@@ -265,23 +267,48 @@ export function createDecompression(
     statusUsagePercent = usage?.percent;
     updateStatus(ctx, currentState(), statusUsagePercent);
     if (!usage || !observeThreshold(usage)) return;
-    if (sameUsage(usage, lastHandledUsage)) return;
-    if (pendingDecompression || activeDecompression) return;
+    const level = classifyDecompressionThreshold(
+      usage.percent,
+      thresholdPercent,
+    );
+    if (pendingDecompression) {
+      if (activeDecompression) return;
+      if (level === "hard" && !pendingDecompression.interrupted) {
+        pendingDecompression.interrupted = true;
+        pendingDecompression.usage = usage;
+        notify(
+          ctx,
+          `context at ${usage.percent}%, hard threshold ${hardThresholdPercent(thresholdPercent)}% — stopping at turn boundary`,
+        );
+        // turn_end is emitted after all tool results. Aborting here prevents the
+        // next assistant turn while preserving the completed turn and queue.
+        ctx.abort();
+      }
+      return;
+    }
+    if (activeDecompression || sameUsage(usage, lastHandledUsage)) return;
 
     const activeRequest: DecompressionRequest = {
       id: ++nextDecompressionId,
       source: "automatic-active",
-      interrupted: true,
+      interrupted: level === "hard",
       usage,
     };
     pendingDecompression = activeRequest;
-    notify(
-      ctx,
-      `context at ${usage.percent}%, threshold ${thresholdPercent}% — stopping at turn boundary`,
-    );
-    // turn_end is emitted after all tool results. Aborting here prevents the next
-    // assistant turn while preserving the completed turn and queued messages.
-    ctx.abort();
+    if (level === "hard") {
+      notify(
+        ctx,
+        `context at ${usage.percent}%, hard threshold ${hardThresholdPercent(thresholdPercent)}% — stopping at turn boundary`,
+      );
+      // turn_end is emitted after all tool results. Aborting here prevents the
+      // next assistant turn while preserving the completed turn and queue.
+      ctx.abort();
+    } else {
+      notify(
+        ctx,
+        `context at ${usage.percent}%, threshold ${thresholdPercent}% — waiting for a safe boundary`,
+      );
+    }
   }
 
   async function onAgentSettled(
@@ -304,6 +331,10 @@ export function createDecompression(
     statusUsagePercent = usage?.percent;
     updateStatus(ctx, currentState(), statusUsagePercent);
     if (!usage || !observeThreshold(usage)) return;
+    const level = classifyDecompressionThreshold(
+      usage.percent,
+      thresholdPercent,
+    );
     if (sameUsage(usage, lastHandledUsage)) return;
 
     const idleDecompression: DecompressionRequest = {

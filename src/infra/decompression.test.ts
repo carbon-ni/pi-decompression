@@ -497,6 +497,101 @@ describe("threshold watcher", () => {
     expect(ctx.compact).not.toHaveBeenCalled();
   });
 
+  it("waits naturally at the soft threshold without aborting", async () => {
+    const resume = vi.fn();
+    const decompression = createTestDecompression(fakeFs(), { resume });
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => ({
+        tokens: 120_000,
+        contextWindow: 200_000,
+        percent: 60,
+      }),
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+    expect(ctx.abort).not.toHaveBeenCalled();
+    expect(ctx.compact).not.toHaveBeenCalled();
+
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: () => void;
+    };
+    options.onComplete?.();
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("does not promote while the pending request is already compacting", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    let usage = 60;
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => ({
+        tokens: 120_000,
+        contextWindow: 200_000,
+        percent: usage,
+      }),
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    usage = 66;
+    await decompression.onTurnEnd(makeTurnEndEvent(2), ctx);
+
+    expect(ctx.abort).not.toHaveBeenCalled();
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("promotes the same soft request at the hard threshold", async () => {
+    const resume = vi.fn();
+    const decompression = createTestDecompression(fakeFs(), { resume });
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    let usage = 60;
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => ({
+        tokens: usage * 2_000,
+        contextWindow: 200_000,
+        percent: usage,
+      }),
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+    usage = 66;
+    await decompression.onTurnEnd(makeTurnEndEvent(2), ctx);
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.abort).toHaveBeenCalledTimes(1);
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: () => void;
+    };
+    options.onComplete?.();
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("forces a direct hard-threshold jump at the turn boundary", async () => {
+    const decompression = createTestDecompression();
+    await decompression.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => ({
+        tokens: 132_000,
+        contextWindow: 200_000,
+        percent: 66,
+      }),
+    });
+
+    await decompression.onTurnEnd(makeTurnEndEvent(), ctx);
+
+    expect(ctx.abort).toHaveBeenCalledTimes(1);
+    await decompression.onAgentSettled({ type: "agent_settled" }, ctx);
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
   it("compacts once when duplicate lifecycle events race", async () => {
     const decompression = createTestDecompression();
     await decompression.command("on 60", makeCtx<CommandCtx>());

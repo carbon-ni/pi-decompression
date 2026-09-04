@@ -52,6 +52,26 @@ export function parseDecompressionArgs(args: string): DecompressionCommand {
   }
 }
 
+/** Derive the hard stop as 10% relative overhead over the soft threshold. */
+export function hardThresholdPercent(softThresholdPercent: number): number {
+  return Math.min(Number((softThresholdPercent * 1.1).toFixed(10)), 100);
+}
+
+export type DecompressionThresholdLevel = "below" | "soft" | "hard";
+
+/** Classify usage against the configured soft threshold and derived hard stop. */
+export function classifyDecompressionThreshold(
+  contextPercent: number | null,
+  softThresholdPercent: number,
+): DecompressionThresholdLevel {
+  if (contextPercent === null || contextPercent < softThresholdPercent) {
+    return "below";
+  }
+  return contextPercent >= hardThresholdPercent(softThresholdPercent)
+    ? "hard"
+    : "soft";
+}
+
 /** Trigger decompression when usage percent reaches the configured threshold. */
 export function shouldDecompressAt(
   contextPercent: number | null,

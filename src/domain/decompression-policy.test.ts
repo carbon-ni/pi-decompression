@@ -4,7 +4,9 @@ import {
   buildHandoffPrompt,
   buildHandoffRelativePath,
   buildPointerSummary,
+  classifyDecompressionThreshold,
   formatDecompressionStatus,
+  hardThresholdPercent,
   isUsableHandoff,
   latestHandoffPath,
   parseDecompressionArgs,
@@ -92,6 +94,38 @@ describe("parseDecompressionArgs", () => {
     expect(parseDecompressionArgs("on 60.5")).toEqual({ action: "invalid" });
     expect(parseDecompressionArgs("on 60 70")).toEqual({ action: "invalid" });
     expect(parseDecompressionArgs("60 70")).toEqual({ action: "invalid" });
+  });
+});
+
+describe("hardThresholdPercent", () => {
+  it.each([
+    [60, 66],
+    [70, 77],
+    [61, 67.1],
+    [90, 99],
+    [95, 100],
+    [100, 100],
+  ])("derives hard threshold %s%% → %s%%", (soft, hard) => {
+    expect(hardThresholdPercent(soft)).toBe(hard);
+  });
+});
+
+describe("classifyDecompressionThreshold", () => {
+  it.each([
+    [59.99, 60, "below"],
+    [60, 60, "soft"],
+    [65.99, 60, "soft"],
+    [66, 60, "hard"],
+    [100, 100, "hard"],
+  ] as const)(
+    "classifies %s%% usage at %s%% soft threshold",
+    (usage, soft, level) => {
+      expect(classifyDecompressionThreshold(usage, soft)).toBe(level);
+    },
+  );
+
+  it("classifies unavailable usage as below", () => {
+    expect(classifyDecompressionThreshold(null, 60)).toBe("below");
   });
 });
 
