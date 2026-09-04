@@ -1,24 +1,24 @@
 ---
 id: TASK-0001
-title: Show compactor state in status bar
+title: Show decompression state in status bar
 status: todo
-depends_on: []
+depends_on: [TASK-0003]
 priority: normal
-tags: [ui, compactor]
+tags: [ui, decompression]
 ---
 
-# Show compactor state in status bar
+# Show decompression state in status bar
 
 ## Problem
-Users cannot see whether automatic compaction is enabled or which threshold is armed without running a command. The footer should make active compactor state visible at a glance.
+Users cannot see whether automatic decompression is enabled or which threshold is armed without running a command. Footer should make active decompression state visible at a glance.
 
 ## Desired outcome
-When handoff compaction is active, Pi's default footer shows a compact status item with the active threshold. Users do not need to run `/break` to confirm current state.
+When handoff decompression is active, Pi's default footer shows compact status item with active threshold. Users do not need to run `/break` to confirm current state.
 
 ## Acceptance criteria
-- [ ] After `/break on 60` or `/compactor on 60`, footer status is `break on:60%`.
-- [ ] After enabling without a configured threshold, footer status is `break on:no-threshold` so state is explicit rather than misleading.
-- [ ] After `/break off` or `/compactor off`, compactor status item is cleared.
+- [ ] After `/break on 60` or `/decompress on 60`, footer status is `decompression on:60%`.
+- [ ] After enabling without configured threshold, footer status is `decompression on:no-threshold` so state is explicit rather than misleading.
+- [ ] After `/break off` or `/decompress off`, decompression status item is cleared.
 - [ ] On session start in trusted project, restored enabled state appears in footer with restored threshold.
 - [ ] On session start with disabled, missing, malformed, or untrusted configuration, status item is absent.
 - [ ] Status updates immediately after successful command state mutation; persistence failure does not leave footer out of sync with active in-memory state.
@@ -28,7 +28,7 @@ When handoff compaction is active, Pi's default footer shows a compact status it
 - [ ] `make check` prints `true`.
 
 ## Constraints
-- Use Pi's additive `ctx.ui.setStatus("compactor", value)` API; do not replace default footer with `setFooter`.
+- Use Pi's additive `ctx.ui.setStatus("decompression", value)` API; do not replace default footer with `setFooter`.
 - Derive display from same in-memory state used by command and threshold watcher; no second state source.
 - Keep status formatting deterministic and independently testable.
 
