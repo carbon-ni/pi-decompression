@@ -115,6 +115,14 @@ Keep one continuation owner and one delivery adapter. Remove temporary instrumen
 - Depending on paid provider for normal CI.
 - Solving every Pi version compatibility issue before identifying observed failing transition.
 
+## Progress
+
+- Minimal delivery fix committed: `fd24f35 fix: queue decompression continuation as follow-up TASK-0007`.
+- Composition root now calls `pi.sendUserMessage(message, { deliverAs: "followUp" })`.
+- Adapter regression assertion was red before production edit and green afterward.
+- Focused index tests, typecheck, and `make check` pass.
+- Still required before closing: deterministic full-runtime semantic-marker proof on actual Pi lifecycle and verdict on secondary above-threshold `Nothing to compact` retrigger.
+
 ## Evidence to retain
 - Pi version under test.
 - Minimal ordered event trace.
