@@ -7,6 +7,7 @@ import {
   isUsableHandoff,
   latestHandoffPath,
   parseCompactorArgs,
+  parseCompactorState,
   shouldCompactAt,
 } from "./compactor-policy.js";
 
@@ -149,6 +150,34 @@ describe("latestHandoffPath", () => {
   it("ignores non-matching files", () => {
     const paths = ["README.md", "handoffs/2026-04-13/09-00-00--other.md"];
     expect(latestHandoffPath(paths, "s1")).toBeUndefined();
+  });
+});
+
+describe("parseCompactorState", () => {
+  it("parses a valid state", () => {
+    expect(parseCompactorState({ enabled: true, thresholdPercent: 60 })).toEqual({
+      enabled: true,
+      thresholdPercent: 60,
+    });
+    expect(parseCompactorState({ enabled: false, thresholdPercent: null })).toEqual({
+      enabled: false,
+      thresholdPercent: null,
+    });
+  });
+
+  it("rejects non-objects, missing fields, and bad types", () => {
+    expect(parseCompactorState(null)).toBeUndefined();
+    expect(parseCompactorState("on")).toBeUndefined();
+    expect(parseCompactorState({})).toBeUndefined();
+    expect(parseCompactorState({ enabled: "yes", thresholdPercent: 60 })).toBeUndefined();
+    expect(parseCompactorState({ enabled: true })).toBeUndefined();
+  });
+
+  it("rejects out-of-range thresholds", () => {
+    expect(parseCompactorState({ enabled: true, thresholdPercent: 0 })).toBeUndefined();
+    expect(parseCompactorState({ enabled: true, thresholdPercent: 101 })).toBeUndefined();
+    expect(parseCompactorState({ enabled: true, thresholdPercent: 60.5 })).toBeUndefined();
+    expect(parseCompactorState({ enabled: true, thresholdPercent: "60" })).toBeUndefined();
   });
 });
 

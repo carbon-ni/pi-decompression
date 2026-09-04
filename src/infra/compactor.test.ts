@@ -2,6 +2,7 @@ import type { ExtensionAPI, SessionBeforeCompactEvent } from "@earendil-works/pi
 import { describe, expect, it, vi } from "vitest";
 import piCompactor from "../index.js";
 import { createCompactor } from "./compactor.js";
+import { createCompactorConfig } from "./compactor-config.js";
 import { createHandoffStore, type HandoffFs } from "./handoff-store.js";
 
 function fakeFs(): HandoffFs & { files: Map<string, string>; dirs: Set<string> } {
@@ -73,6 +74,7 @@ function makeCtx<C>(overrides: Record<string, unknown> = {}): C {
     },
     sessionManager: { getSessionId: () => "s1" },
     cwd: "/proj",
+    isProjectTrusted: () => true,
     hasUI: false,
     ui: { notify: vi.fn() },
     ...overrides,
@@ -82,6 +84,7 @@ function makeCtx<C>(overrides: Record<string, unknown> = {}): C {
 function createTestCompactor(fs: ReturnType<typeof fakeFs> = fakeFs()) {
   return createCompactor({
     store: createHandoffStore(fs),
+    config: createCompactorConfig(fs),
     now: () => NOW,
     reportsDir: () => DIR,
   });
@@ -265,7 +268,8 @@ describe("createCompactor", () => {
       },
     });
     await expect(compactor.beforeCompact(makeEvent(), ctx)).resolves.toBeUndefined();
-    expect(fs.files.size).toBe(0);
+    const wroteHandoff = [...fs.files.keys()].some((path) => path.includes("/handoffs/"));
+    expect(wroteHandoff).toBe(false);
   });
 
   it("falls back to default compaction when there are no messages to summarize", async () => {
@@ -288,6 +292,73 @@ describe("createCompactor", () => {
   });
 });
 
+describe("config persistence", () => {
+  it("persists mutations to .pi/compactor.json", async () => {
+    const fs = fakeFs();
+    const compactor = createTestCompactor(fs);
+    await compactor.command("on", makeCtx<CommandCtx>());
+    await compactor.command("threshold 60", makeCtx<CommandCtx>());
+
+    const saved = JSON.parse(fs.files.get("/proj/.pi/compactor.json") ?? "{}") as unknown;
+    expect(saved).toEqual({ enabled: true, thresholdPercent: 60 });
+  });
+
+  it("does not write for status or invalid args", async () => {
+    const fs = fakeFs();
+    const compactor = createTestCompactor(fs);
+    await compactor.command("status", makeCtx<CommandCtx>());
+    await compactor.command("maybe", makeCtx<CommandCtx>());
+
+    expect(fs.files.has("/proj/.pi/compactor.json")).toBe(false);
+  });
+
+  it("does not persist when the project is untrusted", async () => {
+    const fs = fakeFs();
+    const compactor = createTestCompactor(fs);
+    await compactor.command("on", makeCtx<CommandCtx>({ isProjectTrusted: () => false }));
+
+    expect(compactor.enabled).toBe(true);
+    expect(fs.files.has("/proj/.pi/compactor.json")).toBe(false);
+  });
+
+  it("restores state from .pi/compactor.json on session start", async () => {
+    const fs = fakeFs();
+    fs.files.set(
+      "/proj/.pi/compactor.json",
+      JSON.stringify({ enabled: true, thresholdPercent: 60 }),
+    );
+    const compactor = createTestCompactor(fs);
+    await compactor.onSessionStart({ type: "session_start", reason: "startup" }, makeCtx<BeforeCompactCtx>());
+    expect(compactor.enabled).toBe(true);
+
+    const endCtx = makeEndCtx();
+    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, endCtx);
+    expect(endCtx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a malformed config file", async () => {
+    const fs = fakeFs();
+    fs.files.set("/proj/.pi/compactor.json", "{broken");
+    const compactor = createTestCompactor(fs);
+    await compactor.onSessionStart({ type: "session_start", reason: "startup" }, makeCtx<BeforeCompactCtx>());
+    expect(compactor.enabled).toBe(false);
+  });
+
+  it("does not restore when the project is untrusted", async () => {
+    const fs = fakeFs();
+    fs.files.set(
+      "/proj/.pi/compactor.json",
+      JSON.stringify({ enabled: true, thresholdPercent: 60 }),
+    );
+    const compactor = createTestCompactor(fs);
+    await compactor.onSessionStart(
+      { type: "session_start", reason: "startup" },
+      makeCtx<BeforeCompactCtx>({ isProjectTrusted: () => false }),
+    );
+    expect(compactor.enabled).toBe(false);
+  });
+});
+
 describe("index wiring", () => {
   it("registers the /compactor command and the session_before_compact handler", () => {
     const pi = {
@@ -300,5 +371,6 @@ describe("index wiring", () => {
     expect(pi.registerCommand).toHaveBeenCalledWith("compactor", expect.anything());
     expect(pi.on).toHaveBeenCalledWith("session_before_compact", expect.anything());
     expect(pi.on).toHaveBeenCalledWith("agent_end", expect.anything());
+    expect(pi.on).toHaveBeenCalledWith("session_start", expect.anything());
   });
 });

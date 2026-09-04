@@ -37,6 +37,30 @@ export function shouldCompactAt(contextPercent: number | null, thresholdPercent:
   return contextPercent !== null && contextPercent >= thresholdPercent;
 }
 
+export interface CompactorState {
+  enabled: boolean;
+  thresholdPercent: number | null;
+}
+
+/** Validate untyped config-file content; undefined means invalid. */
+export function parseCompactorState(data: unknown): CompactorState | undefined {
+  if (typeof data !== "object" || data === null) return undefined;
+  const record = data as Record<string, unknown>;
+  const { enabled, thresholdPercent } = record;
+  if (typeof enabled !== "boolean") return undefined;
+  if (!("thresholdPercent" in record)) return undefined;
+  if (
+    thresholdPercent !== null &&
+    (typeof thresholdPercent !== "number" ||
+      !Number.isInteger(thresholdPercent) ||
+      thresholdPercent < 1 ||
+      thresholdPercent > 100)
+  ) {
+    return undefined;
+  }
+  return { enabled, thresholdPercent };
+}
+
 export function isUsableHandoff(text: string): boolean {
   return text.trim().length > 0;
 }

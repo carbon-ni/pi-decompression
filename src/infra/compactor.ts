@@ -7,6 +7,7 @@ import {
   type ExtensionCommandContext,
   type ExtensionContext,
   type SessionBeforeCompactEvent,
+  type SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
 import {
   buildHandoffCompaction,
@@ -15,7 +16,12 @@ import {
   parseCompactorArgs,
   shouldCompactAt,
   type CompactorCommand,
+  type CompactorState,
 } from "../domain/compactor-policy.js";
+import {
+  createCompactorConfig,
+  type CompactorConfigStore,
+} from "./compactor-config.js";
 import { createHandoffStore, type HandoffStore } from "./handoff-store.js";
 
 const MAX_HANDOFF_TOKENS = 8192;
@@ -48,32 +54,50 @@ export interface Compactor {
     ctx: ExtensionContext,
   ): Promise<BeforeCompactResult | undefined>;
   onAgentEnd(event: AgentEndEvent, ctx: ExtensionContext): Promise<void>;
+  onSessionStart(event: SessionStartEvent, ctx: ExtensionContext): Promise<void>;
 }
 
 export function createCompactor(
   options: {
     store?: HandoffStore;
+    config?: CompactorConfigStore;
     uuid?: () => string;
     now?: () => Date;
     reportsDir?: (cwd: string) => string;
   } = {},
 ): Compactor {
   const store = options.store ?? createHandoffStore();
+  const config = options.config ?? createCompactorConfig();
   const uuid = options.uuid ?? randomUUID;
   const now = options.now ?? (() => new Date());
   const reportsDir = options.reportsDir ?? defaultReportsDir;
   let enabled = false;
   let thresholdPercent: number | null = null;
 
+  function currentState(): CompactorState {
+    return { enabled, thresholdPercent };
+  }
+
+  async function persistState(ctx: ExtensionContext): Promise<void> {
+    if (!ctx.isProjectTrusted()) return;
+    try {
+      await config.write(ctx.cwd, currentState());
+    } catch {
+      notify(ctx, "compactor: could not save state to .pi/compactor.json");
+    }
+  }
+
   async function command(args: string, ctx: ExtensionCommandContext): Promise<void> {
     const command: CompactorCommand = parseCompactorArgs(args);
     switch (command.action) {
       case "enable":
         enabled = true;
+        await persistState(ctx);
         notify(ctx, describeState());
         break;
       case "disable":
         enabled = false;
+        await persistState(ctx);
         notify(ctx, describeState());
         break;
       case "status":
@@ -81,6 +105,7 @@ export function createCompactor(
         break;
       case "setThreshold":
         thresholdPercent = command.percent;
+        await persistState(ctx);
         notify(ctx, describeState());
         break;
       case "invalid":
@@ -101,6 +126,14 @@ export function createCompactor(
     notify(ctx, `context at ${percent}%, threshold ${thresholdPercent}% — compacting`);
     // Compaction itself is not an agent run, so this cannot self-loop.
     ctx.compact();
+  }
+
+  async function onSessionStart(_event: SessionStartEvent, ctx: ExtensionContext): Promise<void> {
+    if (!ctx.isProjectTrusted()) return;
+    const state = await config.read(ctx.cwd);
+    if (!state) return;
+    enabled = state.enabled;
+    thresholdPercent = state.thresholdPercent;
   }
 
   async function beforeCompact(
@@ -171,6 +204,7 @@ export function createCompactor(
     command,
     beforeCompact,
     onAgentEnd,
+    onSessionStart,
   };
 }
 
