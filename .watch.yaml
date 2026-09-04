@@ -1,10 +1,15 @@
 on:
   change: "**/*.ts"
+  socket: .watch.sock
 
 execution:
   concurrency: 3
 
 jobs:
+  - name: verify @agent-final
+    trigger: manual
+    run: "make --no-print-directory check"
+
   - name: lint
     run: "make --no-print-directory lint"
     parallel: quality-checks
