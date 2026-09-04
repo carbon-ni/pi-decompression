@@ -1,7 +1,7 @@
 ---
 id: TASK-0005
 title: Prove pi-decompression release readiness
-status: doing
+status: done
 depends_on: []
 priority: high
 tags: [release, package, qa]
@@ -16,7 +16,7 @@ Runtime behavior is verified, but project has not yet proven full release gate, 
 Produce evidence-backed release verdict for current `0.1.0` candidate. Candidate is ready only if repository gates pass and packed artifact installs/loads in isolation. Any intentional publication blocker is explicit rather than silently removed.
 
 ## Acceptance criteria
-- [ ] `make release-check` passes unchanged, including audit at configured severity.
+- [x] `make release-check` passes unchanged, including audit at configured severity.
 - [x] `npm ci` is reproducible from exact lockfile in clean isolated checkout or equivalent worktree.
 - [x] Package metadata is audited: name, version, description, keywords, engine, peer dependency, `pi.extensions`, file allowlist, `private`, license, repository, and provenance fields.
 - [x] Release verdict distinguishes Git/tag/package-install readiness from npm-registry publication readiness; `private: true` is not removed without explicit publication decision.
@@ -45,16 +45,17 @@ Produce evidence-backed release verdict for current `0.1.0` candidate. Candidate
 - Concise release-readiness report with verdict: ready, ready-for-tag-but-not-publish, or blocked.
 - Exact blockers and smallest next manual action.
 
-## Current blocker
-- `npm audit --audit-level=high` cannot reach npm registry: service unavailable and bounded retries/timeouts did not return a result.
-- Keep task `doing` until unchanged `make release-check` obtains real audit result.
-- Publication also remains intentionally blocked by `private: true` and undefined license, repository ownership, and provenance policy.
+## Final verdict
+- Ready for Git/SemVer tagging and isolated package installation.
+- Not ready for npm-registry publication by design: `private: true` remains, and license, repository ownership, and provenance policy require explicit decisions.
+- Registry access recovered; unchanged `make release-check` now passes with `found 0 vulnerabilities`.
 
 ## Evidence
 - Release hardening: `f97e7f2 ci: harden release package checks (TASK-0005)`.
 - Isolated `npm ci`, tarball production install, and Pi 0.84.4 packaged-copy load passed.
 - Artifact: `pi-decompression@0.1.0`, 12 files, 9,464 bytes packed, 32,168 bytes unpacked.
 - Packaged runtime exposes `/decompress` and `/break`, excludes `/compactor`, persists/restores new config, and renders status.
-- Deterministic release gates before audit pass: 107 tests, 100% coverage, format, architecture, and package check.
+- Final release gate passes: 125 tests, 100% statements/branches/functions/lines coverage, format, architecture, audit, and package checks.
+- Ignored Funzzy responder metadata is explicitly excluded from Biome so local runtime state cannot make release formatting nondeterministic (`0bf4d1c`).
 - Report: `/Users/cristianoliveira/.agents/reports/04-09-26/TASK-0005-release-readiness.md`.
 
