@@ -1,4 +1,9 @@
-import type { ExtensionAPI, SessionBeforeCompactEvent } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  SessionBeforeCompactEvent,
+  SessionCompactEvent,
+  TurnEndEvent,
+} from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import piCompactor from "../index.js";
 import { createCompactor } from "./compactor.js";
@@ -82,12 +87,16 @@ function makeCtx<C>(overrides: Record<string, unknown> = {}): C {
   } as unknown as C;
 }
 
-function createTestCompactor(fs: ReturnType<typeof fakeFs> = fakeFs()) {
+function createTestCompactor(
+  fs: ReturnType<typeof fakeFs> = fakeFs(),
+  options: Parameters<typeof createCompactor>[0] = {},
+) {
   return createCompactor({
     store: createHandoffStore(fs),
     config: createCompactorConfig(fs),
     now: () => NOW,
     reportsDir: () => DIR,
+    ...options,
   });
 }
 
@@ -95,8 +104,23 @@ function makeSettledCtx(overrides: Record<string, unknown> = {}) {
   return makeCtx<SettledCtx>({
     getContextUsage: () => ({ tokens: 150_000, contextWindow: 200_000, percent: 75 }),
     compact: vi.fn(),
+    hasPendingMessages: () => false,
     ...overrides,
   });
+}
+
+function makeTurnEndEvent(turnIndex = 1): TurnEndEvent {
+  return {
+    type: "turn_end",
+    turnIndex,
+    message: {
+      role: "assistant",
+      content: [{ type: "text", text: "done" }],
+      stopReason: "stop",
+      timestamp: Date.now(),
+    },
+    toolResults: [],
+  } as unknown as TurnEndEvent;
 }
 
 describe("threshold watcher", () => {
@@ -184,6 +208,155 @@ describe("threshold watcher", () => {
     const message = vi.mocked(ctx.ui.notify).mock.calls.at(-1)?.[0] as string | undefined;
     expect(message).toContain("on");
     expect(message).toContain("60");
+  });
+
+  it("requests a safe stop at the completed turn boundary", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+
+    expect(ctx.abort).toHaveBeenCalledTimes(1);
+    expect(ctx.compact).not.toHaveBeenCalled();
+  });
+
+  it("compacts once when duplicate lifecycle events race", async () => {
+    const compactor = createTestCompactor();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onTurnEnd(makeTurnEndEvent(2), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.abort).toHaveBeenCalledTimes(1);
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not compact or resume after /break off wins the settle race", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.command("off", makeCtx<CommandCtx>());
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).not.toHaveBeenCalled();
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("resumes interrupted work once after successful compaction", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+    options.onComplete?.({});
+
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears an in-flight continuation when /break off wins after compaction starts", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn() });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    await compactor.command("off", makeCtx<CommandCtx>());
+    options.onComplete?.({});
+
+    expect(resume).not.toHaveBeenCalled();
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    expect(ctx.compact).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not synthesize continuation when a queued message exists", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx({ abort: vi.fn(), hasPendingMessages: () => true });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("compacts idle threshold usage without synthetic continuation", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx();
+
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onComplete?: (result: unknown) => void;
+    };
+    options.onComplete?.({});
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+    expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("reports cancellation, clears pending state, and allows a later fresh trigger", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    let usage = { tokens: 150_000, contextWindow: 200_000, percent: 75 };
+    const ctx = makeSettledCtx({
+      abort: vi.fn(),
+      getContextUsage: () => usage,
+    });
+
+    await compactor.onTurnEnd(makeTurnEndEvent(), ctx);
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    const options = vi.mocked(ctx.compact).mock.calls[0]?.[0] as {
+      onError?: (error: Error) => void;
+    };
+    options.onError?.(new Error("cancelled"));
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    expect(ctx.compact).toHaveBeenCalledTimes(1);
+
+    usage = { tokens: 170_000, contextWindow: 200_000, percent: 85 };
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
+    expect(ctx.compact).toHaveBeenCalledTimes(2);
+    expect(resume).not.toHaveBeenCalled();
+    expect(vi.mocked(ctx.ui.notify).mock.calls.flat().join(" ")).toContain("cancelled");
+  });
+
+  it("never resumes manual compaction", async () => {
+    const resume = vi.fn();
+    const compactor = createTestCompactor(fakeFs(), { resume });
+    await compactor.command("on 60", makeCtx<CommandCtx>());
+    const ctx = makeSettledCtx();
+
+    await compactor.onSessionCompact(
+      { type: "session_compact", reason: "manual", fromExtension: false } as SessionCompactEvent,
+      ctx,
+    );
+
+    expect(resume).not.toHaveBeenCalled();
   });
 });
 

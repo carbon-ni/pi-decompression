@@ -7,6 +7,7 @@ export default function piCompactor(pi: ExtensionAPI): void {
   const compactor = createCompactor({
     store: createHandoffStore(),
     config: createCompactorConfig(),
+    resume: (message) => pi.sendUserMessage(message),
   });
 
   const command = {
@@ -20,5 +21,9 @@ export default function piCompactor(pi: ExtensionAPI): void {
   });
   pi.on("session_start", compactor.onSessionStart);
   pi.on("session_before_compact", compactor.beforeCompact);
+  pi.on("turn_end", compactor.onTurnEnd);
   pi.on("agent_settled", compactor.onAgentSettled);
+  pi.on("session_compact", compactor.onSessionCompact);
+  pi.on("session_compact_failed", compactor.onSessionCompactFailed);
+  pi.on("session_shutdown", compactor.onSessionShutdown);
 }
