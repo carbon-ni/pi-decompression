@@ -110,5 +110,6 @@ it("resumes through Pi's sendUserMessage adapter after native compaction", async
 
   expect(sendUserMessage).toHaveBeenCalledWith(
     "Continue the interrupted user task using the handoff context.",
+    { deliverAs: "followUp" },
   );
 });
