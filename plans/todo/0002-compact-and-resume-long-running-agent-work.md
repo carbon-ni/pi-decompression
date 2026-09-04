@@ -1,7 +1,7 @@
 ---
 id: TASK-0002
 title: Compact and resume long-running agent work
-status: todo
+status: doing
 depends_on: []
 priority: high
 tags: [compactor, lifecycle, reliability]
