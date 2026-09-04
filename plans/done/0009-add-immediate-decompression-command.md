@@ -1,7 +1,7 @@
 ---
 id: TASK-0009
 title: Add immediate decompression command
-status: doing
+status: done
 depends_on: [TASK-0007]
 priority: normal
 tags: [decompression, command, qol, manual]
@@ -29,23 +29,23 @@ User can run `/break now` to request one handoff decompression immediately. Cano
 - Because idle invocation does not interrupt active goal, it does not synthesize `Continue...` afterward.
 
 ## Acceptance criteria
-- [ ] Parser recognizes exact single argument `now` as explicit decompression action.
-- [ ] `/break now` and `/decompress now` share exact handler and behavior.
-- [ ] Idle invocation starts exactly one `ctx.compact()` call using existing handoff hook.
-- [ ] Explicit invocation works with automatic decompression disabled and without configured threshold.
-- [ ] Invocation leaves `enabled` and `thresholdPercent` unchanged in memory and persisted config.
-- [ ] Successful explicit decompression reports concise completion notification.
-- [ ] Compaction rejection/failure reports actionable error and clears request state so later `/break now` can retry.
-- [ ] Invocation with no compactable history reports Pi error, including `Nothing to compact`, without synthetic continuation or loop.
-- [ ] Busy invocation does not call `ctx.abort()` or `ctx.compact()` and reports: wait until current work settles, then retry.
-- [ ] Existing pending user messages count as busy and are not overtaken.
-- [ ] Manual request cannot race or start second compaction while automatic request is pending/active.
-- [ ] Successful manual decompression disarms automatic threshold until usage is observed below threshold, matching TASK-0007 loop guard.
-- [ ] Explicit idle decompression never sends synthetic continuation.
-- [ ] Command usage/help becomes `/decompress [on|off|now] [threshold]` and equivalent `/break` copy.
-- [ ] README documents `now`, idle-only boundary, state preservation, and difference from automatic threshold behavior.
-- [ ] Deterministic tests cover parser success/rejection, disabled state, enabled state preservation, busy rejection, duplicate suppression, success, failure, no-history error, and no continuation.
-- [ ] Watcher `@agent-final` gate passes with freshness proof.
+- [x] Parser recognizes exact single argument `now` as explicit decompression action.
+- [x] `/break now` and `/decompress now` share exact handler and behavior.
+- [x] Idle invocation starts exactly one `ctx.compact()` call using existing handoff hook.
+- [x] Explicit invocation works with automatic decompression disabled and without configured threshold.
+- [x] Invocation leaves `enabled` and `thresholdPercent` unchanged in memory and persisted config.
+- [x] Successful explicit decompression reports concise completion notification.
+- [x] Compaction rejection/failure reports actionable error and clears request state so later `/break now` can retry.
+- [x] Invocation with no compactable history reports Pi error, including `Nothing to compact`, without synthetic continuation or loop.
+- [x] Busy invocation does not call `ctx.abort()` or `ctx.compact()` and reports: wait until current work settles, then retry.
+- [x] Existing pending user messages count as busy and are not overtaken.
+- [x] Manual request cannot race or start second compaction while automatic request is pending/active.
+- [x] Successful manual decompression disarms automatic threshold until usage is observed below threshold, matching TASK-0007 loop guard.
+- [x] Explicit idle decompression never sends synthetic continuation.
+- [x] Command usage/help becomes `/decompress [on|off|now] [threshold]` and equivalent `/break` copy.
+- [x] README documents `now`, idle-only boundary, state preservation, and difference from automatic threshold behavior.
+- [x] Deterministic tests cover parser success/rejection, disabled state, enabled state preservation, busy rejection, duplicate suppression, success, failure, no-history error, and no continuation.
+- [x] Watcher `@agent-final` gate passes with freshness proof.
 
 ## Suggested TDD sequence
 
