@@ -285,21 +285,19 @@ describe("parseDecompressionState", () => {
 });
 
 describe("buildHandoffDecompression", () => {
-  it("keeps almost nothing: the last branch entry", () => {
+  it("keeps Pi's prepared boundary before a tool result", () => {
     const result = buildHandoffDecompression({
       handoffPath: "/proj/.tmp/handoffs/handoff-s1.md",
-      branchEntryIds: ["e1", "e2", "e3"],
-      fallbackFirstKeptEntryId: "keep-1",
+      firstKeptEntryId: "assistant-call",
       tokensBefore: 90_000,
     });
-    expect(result.firstKeptEntryId).toBe("e3");
+    expect(result.firstKeptEntryId).toBe("assistant-call");
   });
 
-  it("falls back to the preparation keep point when the branch is empty", () => {
+  it("keeps the prepared boundary for an empty branch projection", () => {
     const result = buildHandoffDecompression({
       handoffPath: "/proj/.tmp/handoffs/handoff-s1.md",
-      branchEntryIds: [],
-      fallbackFirstKeptEntryId: "keep-1",
+      firstKeptEntryId: "keep-1",
       tokensBefore: 90_000,
     });
     expect(result.firstKeptEntryId).toBe("keep-1");
@@ -308,8 +306,7 @@ describe("buildHandoffDecompression", () => {
   it("points the summary at the handoff file and persists the path in details", () => {
     const result = buildHandoffDecompression({
       handoffPath: "/proj/.tmp/handoffs/handoff-s1.md",
-      branchEntryIds: ["e1"],
-      fallbackFirstKeptEntryId: "keep-1",
+      firstKeptEntryId: "keep-1",
       tokensBefore: 90_000,
     });
     expect(result.summary).toContain("/proj/.tmp/handoffs/handoff-s1.md");

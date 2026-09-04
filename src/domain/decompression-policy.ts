@@ -176,8 +176,8 @@ export function buildHandoffPrompt(
 
 export interface HandoffDecompressionInput {
   handoffPath: string;
-  branchEntryIds: readonly string[];
-  fallbackFirstKeptEntryId: string;
+  /** Boundary selected by Pi's compaction preparation; never a tool result. */
+  firstKeptEntryId: string;
   tokensBefore: number;
 }
 
@@ -189,17 +189,15 @@ export interface HandoffDecompression {
 }
 
 /**
- * Keep almost nothing: only the newest branch entry survives next to the
- * pointer summary; the handoff file carries the real context.
+ * Keep Pi's prepared safe boundary next to the pointer summary; the handoff
+ * file carries the real context.
  */
 export function buildHandoffDecompression(
   input: HandoffDecompressionInput,
 ): HandoffDecompression {
-  const firstKeptEntryId =
-    input.branchEntryIds.at(-1) ?? input.fallbackFirstKeptEntryId;
   return {
     summary: buildPointerSummary(input.handoffPath),
-    firstKeptEntryId,
+    firstKeptEntryId: input.firstKeptEntryId,
     tokensBefore: input.tokensBefore,
     details: { handoffPath: input.handoffPath },
   };

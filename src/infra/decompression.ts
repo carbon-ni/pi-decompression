@@ -549,8 +549,7 @@ export function createDecompression(
       compaction: {
         ...buildHandoffDecompression({
           handoffPath: handoffFile,
-          branchEntryIds: event.branchEntries.map((entry) => entry.id),
-          fallbackFirstKeptEntryId: preparation.firstKeptEntryId,
+          firstKeptEntryId: preparation.firstKeptEntryId,
           tokensBefore: preparation.tokensBefore,
         }),
         usage,

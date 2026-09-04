@@ -1166,7 +1166,7 @@ describe("createDecompression", () => {
 
     expect(fs.files.get(HANDOFF_FILE)).toContain("# Handoff");
     expect(result?.compaction).toMatchObject({
-      firstKeptEntryId: "e2",
+      firstKeptEntryId: "keep-1",
       tokensBefore: 90_000,
       details: { handoffPath: HANDOFF_FILE },
     });
