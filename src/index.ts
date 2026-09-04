@@ -20,5 +20,5 @@ export default function piCompactor(pi: ExtensionAPI): void {
   });
   pi.on("session_start", compactor.onSessionStart);
   pi.on("session_before_compact", compactor.beforeCompact);
-  pi.on("agent_end", compactor.onAgentEnd);
+  pi.on("agent_settled", compactor.onAgentSettled);
 }

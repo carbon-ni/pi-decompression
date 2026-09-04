@@ -41,6 +41,7 @@ const NOW = new Date(2026, 3, 13, 20, 55, 1);
 const HANDOFF_FILE = `${DIR}/handoffs/2026-04-13/20-55-01--s1.md`;
 
 type BeforeCompactCtx = Parameters<ReturnType<typeof createCompactor>["beforeCompact"]>[1];
+type SettledCtx = Parameters<ReturnType<typeof createCompactor>["onAgentSettled"]>[1];
 type CommandCtx = Parameters<ReturnType<typeof createCompactor>["command"]>[1];
 
 function makeEvent(overrides: Partial<SessionBeforeCompactEvent> = {}): SessionBeforeCompactEvent {
@@ -90,8 +91,8 @@ function createTestCompactor(fs: ReturnType<typeof fakeFs> = fakeFs()) {
   });
 }
 
-function makeEndCtx(overrides: Record<string, unknown> = {}) {
-  return makeCtx<BeforeCompactCtx>({
+function makeSettledCtx(overrides: Record<string, unknown> = {}) {
+  return makeCtx<SettledCtx>({
     getContextUsage: () => ({ tokens: 150_000, contextWindow: 200_000, percent: 75 }),
     compact: vi.fn(),
     ...overrides,
@@ -104,8 +105,8 @@ describe("threshold watcher", () => {
     await compactor.command("on", makeCtx<CommandCtx>());
     await compactor.command("60", makeCtx<CommandCtx>());
 
-    const ctx = makeEndCtx();
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+    const ctx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).toHaveBeenCalledTimes(1);
   });
@@ -115,8 +116,8 @@ describe("threshold watcher", () => {
     await compactor.command("on 60", makeCtx<CommandCtx>());
     expect(compactor.enabled).toBe(true);
 
-    const ctx = makeEndCtx();
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+    const ctx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).toHaveBeenCalledTimes(1);
   });
@@ -135,8 +136,8 @@ describe("threshold watcher", () => {
     await compactor.command("on", makeCtx<CommandCtx>());
     await compactor.command("80", makeCtx<CommandCtx>());
 
-    const ctx = makeEndCtx();
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+    const ctx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).not.toHaveBeenCalled();
   });
@@ -145,8 +146,8 @@ describe("threshold watcher", () => {
     const compactor = createTestCompactor();
     await compactor.command("60", makeCtx<CommandCtx>());
 
-    const ctx = makeEndCtx();
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+    const ctx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).not.toHaveBeenCalled();
   });
@@ -156,8 +157,8 @@ describe("threshold watcher", () => {
     await compactor.command("on", makeCtx<CommandCtx>());
     await compactor.command("60", makeCtx<CommandCtx>());
 
-    const ctx = makeEndCtx({ getContextUsage: () => undefined });
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+    const ctx = makeSettledCtx({ getContextUsage: () => undefined });
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).not.toHaveBeenCalled();
   });
@@ -166,8 +167,8 @@ describe("threshold watcher", () => {
     const compactor = createTestCompactor();
     await compactor.command("on", makeCtx<CommandCtx>());
 
-    const ctx = makeEndCtx();
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, ctx);
+    const ctx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, ctx);
 
     expect(ctx.compact).not.toHaveBeenCalled();
   });
@@ -351,9 +352,9 @@ describe("config persistence", () => {
     await compactor.onSessionStart({ type: "session_start", reason: "startup" }, makeCtx<BeforeCompactCtx>());
     expect(compactor.enabled).toBe(true);
 
-    const endCtx = makeEndCtx();
-    await compactor.onAgentEnd({ type: "agent_end", messages: [] }, endCtx);
-    expect(endCtx.compact).toHaveBeenCalledTimes(1);
+    const settledCtx = makeSettledCtx();
+    await compactor.onAgentSettled({ type: "agent_settled" }, settledCtx);
+    expect(settledCtx.compact).toHaveBeenCalledTimes(1);
   });
 
   it("ignores a malformed config file", async () => {
@@ -390,7 +391,8 @@ describe("index wiring", () => {
 
     expect(pi.registerCommand).toHaveBeenCalledWith("compactor", expect.anything());
     expect(pi.on).toHaveBeenCalledWith("session_before_compact", expect.anything());
-    expect(pi.on).toHaveBeenCalledWith("agent_end", expect.anything());
+    expect(pi.on).toHaveBeenCalledWith("agent_settled", expect.anything());
+    expect(pi.on).not.toHaveBeenCalledWith("agent_end", expect.anything());
     expect(pi.on).toHaveBeenCalledWith("session_start", expect.anything());
   });
 });

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import {
   convertToLlm,
   serializeConversation,
-  type AgentEndEvent,
+  type AgentSettledEvent,
   type ExtensionCommandContext,
   type ExtensionContext,
   type SessionBeforeCompactEvent,
@@ -53,7 +53,7 @@ export interface Compactor {
     event: SessionBeforeCompactEvent,
     ctx: ExtensionContext,
   ): Promise<BeforeCompactResult | undefined>;
-  onAgentEnd(event: AgentEndEvent, ctx: ExtensionContext): Promise<void>;
+  onAgentSettled(event: AgentSettledEvent, ctx: ExtensionContext): Promise<void>;
   onSessionStart(event: SessionStartEvent, ctx: ExtensionContext): Promise<void>;
 }
 
@@ -121,7 +121,7 @@ export function createCompactor(
     return `compactor ${enabled ? "on" : "off"}, threshold ${threshold}`;
   }
 
-  async function onAgentEnd(_event: AgentEndEvent, ctx: ExtensionContext): Promise<void> {
+  async function onAgentSettled(_event: AgentSettledEvent, ctx: ExtensionContext): Promise<void> {
     if (!enabled || thresholdPercent === null) return;
     const percent = ctx.getContextUsage()?.percent ?? null;
     if (!shouldCompactAt(percent, thresholdPercent)) return;
@@ -205,7 +205,7 @@ export function createCompactor(
     },
     command,
     beforeCompact,
-    onAgentEnd,
+    onAgentSettled,
     onSessionStart,
   };
 }

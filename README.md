@@ -30,7 +30,7 @@ Examples:
 - `/break 60` — set the context threshold to 60%.
 - `/break on 60` — enable automatic compaction and set its threshold.
 
-State is persisted in `.pi/compactor.json` for trusted projects. Before Pi compacts, the extension writes a handoff report under `$AGENT_WORKSPACE/reports` (or `.tmp/reports` when `AGENT_WORKSPACE` is unset).
+State is persisted in `.pi/compactor.json` for trusted projects. When enabled with a threshold, the extension checks usage after Pi fully settles (including retries, automatic compaction, and queued follow-ups), then triggers one threshold compaction. Before Pi compacts, the extension writes a handoff report under `$AGENT_WORKSPACE/reports` (or `.tmp/reports` when `AGENT_WORKSPACE` is unset).
 
 ## Canonical workflow
 

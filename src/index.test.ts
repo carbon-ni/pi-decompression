@@ -3,18 +3,17 @@ import { expect, it, vi } from "vitest";
 import piCompactor from "./index.js";
 
 it("registers compactor and its coffee-break alias", () => {
-  const pi = {
-    registerCommand: vi.fn(),
-    on: vi.fn(),
-  } as unknown as ExtensionAPI;
+  const registerCommand = vi.fn();
+  const on = vi.fn();
+  const pi = { registerCommand, on } as unknown as ExtensionAPI;
 
   piCompactor(pi);
 
-  expect(pi.registerCommand).toHaveBeenCalledWith("compactor", {
+  expect(registerCommand).toHaveBeenCalledWith("compactor", {
     description: "Handoff compaction (/compactor [on|off] [threshold])",
     handler: expect.any(Function),
   });
-  expect(pi.registerCommand).toHaveBeenCalledWith("break", {
+  expect(registerCommand).toHaveBeenCalledWith("break", {
     description: "Handoff compaction alias (/break [on|off] [threshold])",
     handler: expect.any(Function),
   });
